@@ -205,5 +205,5 @@ if __name__ == '__main__':
     logger1.info('来自module1的消息')
     logger2.info('来自module2的消息')
     
-    print('\n✅ 日志系统测试完成')
+    print('\n[OK] 日志系统测试完成')
     print(f'日志文件已保存到: logs/')

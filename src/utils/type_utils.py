@@ -172,4 +172,4 @@ if __name__ == '__main__':
     result = safe_cast("abc", int, default=0)
     print(f"Safe cast (failed): 'abc' -> {result}")
     
-    print("✅ 所有类型工具测试通过")
+    print("[OK] 所有类型工具测试通过")

@@ -297,7 +297,7 @@ class DataPipeline:
         Returns:
             (train_loader, val_loader, test_loader)
         """
-        print("🚀 创建DataLoader...")
+        print("[START] 创建DataLoader...")
         
         train_loader, val_loader, test_loader = create_data_loaders(
             train_dataset,
@@ -322,7 +322,7 @@ class DataPipeline:
             (train_loader, val_loader, test_loader)
         """
         print("=" * 60)
-        print("🎯 开始数据预处理管道")
+        print("[START] 开始数据预处理管道")
         print("=" * 60)
         
         # 1. 加载数据
@@ -347,7 +347,7 @@ class DataPipeline:
         )
         
         print("=" * 60)
-        print("✅ 数据预处理管道完成！")
+        print("[OK] 数据预处理管道完成！")
         print("=" * 60)
         
         return train_loader, val_loader, test_loader

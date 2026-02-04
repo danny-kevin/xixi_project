@@ -87,7 +87,7 @@ def train(
         model = ModelFactory.create_model(config).to(device)
         
         num_params = sum(p.numel() for p in model.parameters())
-        logger.info(f'✅ 模型创建完成')
+        logger.info(f'[OK] 模型创建完成')
         logger.info(f'  模型参数量: {num_params:,}')
         logger.info(f'  输入变量数: {config.model.num_variables}')
         logger.info(f'  预测范围: {config.model.prediction_horizon}天')
@@ -143,7 +143,7 @@ def train(
             criterion=criterion
         )
         
-        logger.info('✅ 训练器创建完成')
+        logger.info('[OK] 训练器创建完成')
         
         # ==================== 步骤4: 训练模型 ====================
         logger.info('步骤4: 开始训练...')
@@ -159,7 +159,7 @@ def train(
         # 记录训练历史
         tracker.log_metrics(history)
         
-        logger.info('✅ 训练完成')
+        logger.info('[OK] 训练完成')
         
         # ==================== 步骤5: 保存模型 ====================
         logger.info('步骤5: 保存模型...')
@@ -172,7 +172,7 @@ def train(
             is_best=True
         )
         
-        logger.info(f'✅ 模型已保存到: {checkpoint_dir}')
+        logger.info(f'[OK] 模型已保存到: {checkpoint_dir}')
         
         # ==================== 步骤6: 测试集评估 ====================
         logger.info('步骤6: 在测试集上评估...')

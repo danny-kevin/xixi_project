@@ -64,7 +64,7 @@ class ShapeValidator:
                     f"实际形状: {actual_shape}"
                 )
         
-        logger.debug(f"✅ {name} 形状验证通过: {actual_shape}")
+        logger.debug(f"[OK] {name} 形状验证通过: {actual_shape}")
     
     @staticmethod
     def validate_range(
@@ -104,7 +104,7 @@ class ShapeValidator:
                 f"最大值={actual_max}, 期望<={max_val}"
             )
         
-        logger.debug(f"✅ {name} 值范围验证通过: [{actual_min:.4f}, {actual_max:.4f}]")
+        logger.debug(f"[OK] {name} 值范围验证通过: [{actual_min:.4f}, {actual_max:.4f}]")
     
     @staticmethod
     def validate_no_nan_inf(
@@ -134,7 +134,7 @@ class ShapeValidator:
         if has_inf:
             raise ValueError(f"{name} 包含Inf值")
         
-        logger.debug(f"✅ {name} NaN/Inf验证通过")
+        logger.debug(f"[OK] {name} NaN/Inf验证通过")
     
     @staticmethod
     def validate_data_window(
@@ -174,7 +174,7 @@ class ShapeValidator:
                 f"X和y的样本数量不一致: X={X.shape[0]}, y={y.shape[0]}"
             )
         
-        logger.info(f"✅ 数据窗口验证通过: X{X.shape}, y{y.shape}")
+        logger.info(f"[OK] 数据窗口验证通过: X{X.shape}, y{y.shape}")
     
     @staticmethod
     def validate_model_pipeline(
@@ -218,7 +218,7 @@ class ShapeValidator:
                 "model_output"
             )
         
-        logger.info("✅ 模型流程验证通过")
+        logger.info("[OK] 模型流程验证通过")
         return output
 
 
@@ -336,4 +336,4 @@ if __name__ == '__main__':
     
     model = DummyModel()
     output = model(x)
-    print(f"✅ 所有验证通过！输出形状: {output.shape}")
+    print(f"[OK] 所有验证通过！输出形状: {output.shape}")

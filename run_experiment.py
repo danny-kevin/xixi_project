@@ -104,7 +104,7 @@ def run_experiment(
         model = ModelFactory.create_model(config).to(device)
         
         num_params = sum(p.numel() for p in model.parameters())
-        logger.info(f'✅ 模型创建完成，参数量: {num_params:,}')
+        logger.info(f'[OK] 模型创建完成，参数量: {num_params:,}')
         logger.info(f'  输入变量数: {config.model.num_variables}')
         logger.info(f'  TCN通道: {config.model.tcn_channels}')
         logger.info(f'  LSTM隐藏层: {config.model.lstm_hidden_size}')
@@ -155,7 +155,7 @@ def run_experiment(
         logger.info('开始训练...')
         history = trainer.train(train_loader, val_loader)
         
-        logger.info('✅ 训练完成')
+        logger.info('[OK] 训练完成')
         
         # 保存训练历史
         tracker.log_metrics(history)
@@ -165,12 +165,12 @@ def run_experiment(
             history,
             save_name='training_history'
         )
-        logger.info('✅ 训练曲线已保存')
+        logger.info('[OK] 训练曲线已保存')
         
         # 保存模型
         checkpoint_path = output_dir / 'best_model.pth'
         trainer.save_checkpoint(str(checkpoint_path), is_best=True)
-        logger.info(f'✅ 模型已保存: {checkpoint_path}')
+        logger.info(f'[OK] 模型已保存: {checkpoint_path}')
         
         # ==================== 阶段4: 模型评估 ====================
         logger.info('\n' + '='*80)
@@ -229,7 +229,7 @@ def run_experiment(
                 predicted=predictions_tensor.numpy(),
                 save_name='predictions'
             )
-            logger.info('✅ 预测结果图已保存')
+            logger.info('[OK] 预测结果图已保存')
             
             # 残差分析
             fig = visualizer.plot_residuals(
@@ -237,10 +237,10 @@ def run_experiment(
                 predicted=predictions_tensor.numpy(),
                 save_name='residuals'
             )
-            logger.info('✅ 残差分析图已保存')
+            logger.info('[OK] 残差分析图已保存')
             
         except ImportError as e:
-            logger.warning(f'⚠️  评估模块部分功能不可用: {e}')
+            logger.warning(f'[WARN]  评估模块部分功能不可用: {e}')
             logger.info('基本评估：测试集损失已记录')
             tracker.log_metric('test_loss', test_loss)
         
@@ -266,7 +266,7 @@ def run_experiment(
                     attention_weights[att_key],
                     save_path=str(output_dir / 'figures' / 'temporal_attention.png')
                 )
-                logger.info('✅ 时间注意力图已保存')
+                logger.info('[OK] 时间注意力图已保存')
             
             # 变量注意力
             if 'variable' in attention_weights or 'variable_attention' in attention_weights:
@@ -277,17 +277,17 @@ def run_experiment(
                         variable_names=config.data.feature_columns,
                         save_path=str(output_dir / 'figures' / 'variable_attention.png')
                     )
-                    logger.info('✅ 变量注意力图已保存')
+                    logger.info('[OK] 变量注意力图已保存')
                 except Exception as e:
                     logger.warning(f'变量注意力可视化失败: {e}')
             
-            logger.info('✅ 可解释性分析完成')
+            logger.info('[OK] 可解释性分析完成')
             
         except ImportError as e:
-            logger.warning(f'⚠️  可解释性分析模块不可用: {e}')
+            logger.warning(f'[WARN]  可解释性分析模块不可用: {e}')
             logger.info('跳过可解释性分析')
         except Exception as e:
-            logger.warning(f'⚠️  可解释性分析出错: {e}')
+            logger.warning(f'[WARN]  可解释性分析出错: {e}')
             logger.info('跳过可解释性分析')
         
         # ==================== 阶段6: 保存配置和总结 ====================
@@ -299,7 +299,7 @@ def run_experiment(
         from src.utils.config import save_config
         config_path = output_dir / 'config.yaml'
         save_config(config, config_path)
-        logger.info(f'✅ 配置已保存: {config_path}')
+        logger.info(f'[OK] 配置已保存: {config_path}')
         
         # 生成总结
         summary_path = output_dir / 'experiment_summary.txt'
@@ -332,7 +332,7 @@ def run_experiment(
             f.write(f'  报告: {output_dir}/evaluation_report.txt\n')
             f.write(f'  图表: {output_dir}/figures/\n')
         
-        logger.info(f'✅ 实验总结已保存: {summary_path}')
+        logger.info(f'[OK] 实验总结已保存: {summary_path}')
         
     except Exception as e:
         logger.error(f'实验过程出错: {e}')
@@ -343,7 +343,7 @@ def run_experiment(
         tracker.finish()
         
         logger.info('\n' + '='*80)
-        logger.info('✅ 实验流程完成')
+        logger.info('[OK] 实验流程完成')
         logger.info(f'所有结果已保存到: {output_dir}')
         logger.info('='*80)
 

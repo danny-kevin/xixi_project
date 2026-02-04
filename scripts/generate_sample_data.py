@@ -196,43 +196,43 @@ def generate_all_sample_data(
     output_path.mkdir(parents=True, exist_ok=True)
     
     print("=" * 60)
-    print("🎲 生成示例数据")
+    print("[RAND] 生成示例数据")
     print("=" * 60)
     
     # 生成疫情数据
-    print("📊 生成疫情数据...")
+    print("[PLOT] 生成疫情数据...")
     epidemic_df = generate_epidemic_data(start_date, n_days, seed)
     epidemic_path = output_path / 'epidemic.csv'
     epidemic_df.to_csv(epidemic_path, index=False)
-    print(f"   ✅ 保存到: {epidemic_path}")
+    print(f"   [OK] 保存到: {epidemic_path}")
     print(f"   形状: {epidemic_df.shape}")
     
     # 生成人口流动数据
-    print("🚶 生成人口流动数据...")
+    print("[MOB] 生成人口流动数据...")
     mobility_df = generate_mobility_data(start_date, n_days, seed)
     mobility_path = output_path / 'mobility.csv'
     mobility_df.to_csv(mobility_path, index=False)
-    print(f"   ✅ 保存到: {mobility_path}")
+    print(f"   [OK] 保存到: {mobility_path}")
     print(f"   形状: {mobility_df.shape}")
     
     # 生成环境数据
-    print("🌡️ 生成环境数据...")
+    print("[TEMP]️ 生成环境数据...")
     environmental_df = generate_environmental_data(start_date, n_days, seed)
     environmental_path = output_path / 'environmental.csv'
     environmental_df.to_csv(environmental_path, index=False)
-    print(f"   ✅ 保存到: {environmental_path}")
+    print(f"   [OK] 保存到: {environmental_path}")
     print(f"   形状: {environmental_df.shape}")
     
     # 生成干预政策数据
-    print("📋 生成干预政策数据...")
+    print("[INFO] 生成干预政策数据...")
     intervention_df = generate_intervention_data(start_date, n_days, seed)
     intervention_path = output_path / 'intervention.csv'
     intervention_df.to_csv(intervention_path, index=False)
-    print(f"   ✅ 保存到: {intervention_path}")
+    print(f"   [OK] 保存到: {intervention_path}")
     print(f"   形状: {intervention_df.shape}")
     
     print("=" * 60)
-    print("✅ 所有示例数据生成完成！")
+    print("[OK] 所有示例数据生成完成！")
     print("=" * 60)
     
     return {

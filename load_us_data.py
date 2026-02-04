@@ -275,3 +275,5 @@ if __name__ == "__main__":
         print(f"batch_X: {batch_X.shape}")
         print(f"batch_y: {batch_y.shape}")
         break
+
+    print("\n[OK] data loader test passed")

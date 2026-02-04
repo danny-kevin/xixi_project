@@ -242,7 +242,7 @@ def main():
         run_experiment(config, device, args.use_wandb)
     
     logger.info('='*80)
-    logger.info('✅ 任务完成')
+    logger.info('[OK] 任务完成')
     logger.info('='*80)
 
 
@@ -250,10 +250,10 @@ if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        print('\n⚠️  用户中断')
+        print('\n[WARN]  用户中断')
         sys.exit(0)
     except Exception as e:
-        print(f'\n❌ 错误: {e}')
+        print(f'\n[ERR] 错误: {e}')
         import traceback
         traceback.print_exc()
         sys.exit(1)

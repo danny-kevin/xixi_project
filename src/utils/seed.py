@@ -45,11 +45,11 @@ def set_seed(seed: int = 42, deterministic: bool = True) -> None:
     if deterministic:
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
-        logger.info(f'✅ 随机种子已设置: {seed} (确定性模式)')
+        logger.info(f'[OK] 随机种子已设置: {seed} (确定性模式)')
     else:
         torch.backends.cudnn.deterministic = False
         torch.backends.cudnn.benchmark = True
-        logger.info(f'✅ 随机种子已设置: {seed} (非确定性模式，性能更好)')
+        logger.info(f'[OK] 随机种子已设置: {seed} (非确定性模式，性能更好)')
     
     logger.debug(f'Python seed: {seed}')
     logger.debug(f'NumPy seed: {seed}')
@@ -89,7 +89,7 @@ def set_random_state(state: dict) -> None:
     if 'cuda' in state and torch.cuda.is_available():
         torch.cuda.set_rng_state_all(state['cuda'])
     
-    logger.info('✅ 随机状态已恢复')
+    logger.info('[OK] 随机状态已恢复')
 
 
 class SeedContext:
@@ -167,4 +167,4 @@ if __name__ == '__main__':
     print(f'恢复后生成: {x3[0]:.4f}, {x4[0]:.4f}')
     print(f'是否相同: {torch.allclose(x1, x3)} and {torch.allclose(x2, x4)}')
     
-    print('\n✅ 随机种子管理测试完成')
+    print('\n[OK] 随机种子管理测试完成')

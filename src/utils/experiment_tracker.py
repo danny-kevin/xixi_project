@@ -65,9 +65,9 @@ class ExperimentTracker:
             log_path = Path(log_dir) / experiment_name
             log_path.mkdir(parents=True, exist_ok=True)
             self.tensorboard_writer = SummaryWriter(log_dir=str(log_path))
-            logger.info(f'✅ TensorBoard已启用: {log_path}')
+            logger.info(f'[OK] TensorBoard已启用: {log_path}')
         elif use_tensorboard and not TENSORBOARD_AVAILABLE:
-            logger.warning('⚠️  TensorBoard未安装，跳过')
+            logger.warning('[WARN]  TensorBoard未安装，跳过')
         
         # Weights & Biases
         self.wandb_run = None
@@ -86,9 +86,9 @@ class ExperimentTracker:
                 name=experiment_name,
                 config=config_dict
             )
-            logger.info(f'✅ Weights & Biases已启用')
+            logger.info(f'[OK] Weights & Biases已启用')
         elif use_wandb and not WANDB_AVAILABLE:
-            logger.warning('⚠️  Weights & Biases未安装，跳过')
+            logger.warning('[WARN]  Weights & Biases未安装，跳过')
         
         self.step = 0
     
@@ -135,6 +135,8 @@ class ExperimentTracker:
         # TensorBoard
         if self.tensorboard_writer is not None:
             for name, value in metrics.items():
+                if value is None:
+                    continue
                 if isinstance(value, (list, tuple)):
                     # 如果是列表，记录最后一个值
                     value = value[-1] if len(value) > 0 else 0
@@ -145,6 +147,8 @@ class ExperimentTracker:
             # 处理列表值
             processed_metrics = {}
             for name, value in metrics.items():
+                if value is None:
+                    continue
                 if isinstance(value, (list, tuple)):
                     value = value[-1] if len(value) > 0 else 0
                 processed_metrics[name] = value
@@ -236,7 +240,7 @@ class ExperimentTracker:
         """
         if self.wandb_run is not None:
             wandb.watch(model, log='all', log_freq=100)
-            logger.info('✅ 模型监控已启用')
+            logger.info('[OK] 模型监控已启用')
     
     def finish(self) -> None:
         """结束追踪"""
@@ -278,5 +282,5 @@ if __name__ == '__main__':
     # 结束
     tracker.finish()
     
-    print('\n✅ 实验追踪器测试完成')
+    print('\n[OK] 实验追踪器测试完成')
     print('运行 tensorboard --logdir logs 查看结果')

@@ -19,7 +19,7 @@ def run_data_pipeline_checks() -> bool:
     """测试完整的数据预处理管道"""
     
     print("\n" + "=" * 70)
-    print("🧪 测试数据预处理管道")
+    print("[TEST] 测试数据预处理管道")
     print("=" * 70 + "\n")
     
     # 数据目录
@@ -28,14 +28,14 @@ def run_data_pipeline_checks() -> bool:
     # 检查数据是否存在
     raw_dir = data_dir / 'raw'
     if not raw_dir.exists() or not any(raw_dir.glob('*.csv')):
-        print("⚠️  未找到数据文件，正在生成示例数据...")
+        print("[WARN]  未找到数据文件，正在生成示例数据...")
         from scripts.generate_sample_data import generate_all_sample_data
         generate_all_sample_data(output_dir=str(raw_dir))
         print()
     
     try:
         # 方式1: 使用便捷函数
-        print("📌 方式1: 使用 prepare_data() 便捷函数\n")
+        print("[NOTE] 方式1: 使用 prepare_data() 便捷函数\n")
         train_loader, val_loader, test_loader, preprocessor = prepare_data(
             data_dir=str(data_dir),
             window_size=21,
@@ -45,11 +45,11 @@ def run_data_pipeline_checks() -> bool:
         )
         
         print("\n" + "=" * 70)
-        print("✅ 数据准备成功！")
+        print("[OK] 数据准备成功！")
         print("=" * 70)
         
         # 验证数据
-        print("\n📊 数据验证:")
+        print("\n[PLOT] 数据验证:")
         print("-" * 70)
         
         # 获取一个批次
@@ -74,7 +74,7 @@ def run_data_pipeline_checks() -> bool:
         
         # 测试反归一化
         print("\n" + "-" * 70)
-        print("🔄 测试反归一化功能:")
+        print("[RETRY] 测试反归一化功能:")
         print("-" * 70)
         
         import numpy as np
@@ -89,14 +89,14 @@ def run_data_pipeline_checks() -> bool:
             print(f"✓ 反归一化后: {original}")
         
         print("\n" + "=" * 70)
-        print("🎉 所有测试通过！")
+        print("[OK] 所有测试通过！")
         print("=" * 70 + "\n")
         
         return True
         
     except Exception as e:
         print("\n" + "=" * 70)
-        print(f"❌ 测试失败: {str(e)}")
+        print(f"[ERR] 测试失败: {str(e)}")
         print("=" * 70 + "\n")
         import traceback
         traceback.print_exc()
@@ -107,7 +107,7 @@ def run_individual_components_checks() -> bool:
     """测试各个组件"""
     
     print("\n" + "=" * 70)
-    print("🧪 测试各个组件")
+    print("[TEST] 测试各个组件")
     print("=" * 70 + "\n")
     
     data_dir = project_root / 'data'
@@ -171,14 +171,14 @@ def run_individual_components_checks() -> bool:
         print(f"✓ 样本形状: X={sample_x.shape}, y={sample_y.shape}")
         
         print("\n" + "=" * 70)
-        print("✅ 所有组件测试通过！")
+        print("[OK] 所有组件测试通过！")
         print("=" * 70 + "\n")
         
         return True
         
     except Exception as e:
         print("\n" + "=" * 70)
-        print(f"❌ 组件测试失败: {str(e)}")
+        print(f"[ERR] 组件测试失败: {str(e)}")
         print("=" * 70 + "\n")
         import traceback
         traceback.print_exc()
@@ -200,8 +200,8 @@ if __name__ == '__main__':
     success2 = run_data_pipeline_checks()
     
     if success1 and success2:
-        print("\n🎊 恭喜！数据预处理模块已完全实现并通过测试！\n")
+        print("\n[OK] 恭喜！数据预处理模块已完全实现并通过测试！\n")
         sys.exit(0)
     else:
-        print("\n⚠️  部分测试失败，请检查错误信息\n")
+        print("\n[WARN]  部分测试失败，请检查错误信息\n")
         sys.exit(1)

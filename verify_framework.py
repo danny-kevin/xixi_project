@@ -24,9 +24,9 @@ try:
         ShapeValidator, to_tensor,
         load_config, save_config
     )
-    print('✅ 工具模块导入成功')
+    print('[OK] 工具模块导入成功')
 except Exception as e:
-    print(f'❌ 工具模块导入失败: {e}')
+    print(f'[ERR] 工具模块导入失败: {e}')
     sys.exit(1)
 
 # 测试2: 日志系统
@@ -36,18 +36,18 @@ try:
     logger.info('日志系统测试')
     logger.debug('调试信息')
     logger.warning('警告信息')
-    print('✅ 日志系统正常')
+    print('[OK] 日志系统正常')
 except Exception as e:
-    print(f'❌ 日志系统失败: {e}')
+    print(f'[ERR] 日志系统失败: {e}')
 
 # 测试3: 设备管理
 print('\n[测试3] 测试设备管理...')
 try:
     device_manager = DeviceManager()
     device = device_manager.get_device()
-    print(f'✅ 设备管理正常，当前设备: {device}')
+    print(f'[OK] 设备管理正常，当前设备: {device}')
 except Exception as e:
-    print(f'❌ 设备管理失败: {e}')
+    print(f'[ERR] 设备管理失败: {e}')
 
 # 测试4: 随机种子
 print('\n[测试4] 测试随机种子...')
@@ -58,11 +58,11 @@ try:
     set_seed(42)
     x2 = torch.randn(5)
     if torch.allclose(x1, x2):
-        print('✅ 随机种子正常（可复现）')
+        print('[OK] 随机种子正常（可复现）')
     else:
-        print('⚠️  随机种子可能有问题（不可复现）')
+        print('[WARN]  随机种子可能有问题（不可复现）')
 except Exception as e:
-    print(f'❌ 随机种子失败: {e}')
+    print(f'[ERR] 随机种子失败: {e}')
 
 # 测试5: 形状验证
 print('\n[测试5] 测试形状验证...')
@@ -72,30 +72,30 @@ try:
     ShapeValidator.validate_shape(x, (32, 21, 11), "test_tensor")
     ShapeValidator.validate_shape(x, (None, 21, 11), "test_tensor")
     ShapeValidator.validate_no_nan_inf(x, "test_tensor")
-    print('✅ 形状验证正常')
+    print('[OK] 形状验证正常')
 except Exception as e:
-    print(f'❌ 形状验证失败: {e}')
+    print(f'[ERR] 形状验证失败: {e}')
 
 # 测试6: 配置加载
 print('\n[测试6] 测试配置加载...')
 try:
     config = load_config('configs/default_config.yaml')
-    print(f'✅ 配置加载正常')
+    print(f'[OK] 配置加载正常')
     print(f'   - 实验名称: {config.experiment_name}')
     print(f'   - 窗口大小: {config.data.window_size}')
     print(f'   - 预测范围: {config.data.prediction_horizon}')
     print(f'   - 训练轮数: {config.training.epochs}')
 except Exception as e:
-    print(f'❌ 配置加载失败: {e}')
+    print(f'[ERR] 配置加载失败: {e}')
 
 # 测试7: 配置序列化
 print('\n[测试7] 测试配置序列化...')
 try:
     config_dict = config.to_dict()
     config_restored = config.from_dict(config_dict)
-    print('✅ 配置序列化正常')
+    print('[OK] 配置序列化正常')
 except Exception as e:
-    print(f'❌ 配置序列化失败: {e}')
+    print(f'[ERR] 配置序列化失败: {e}')
 
 # 测试8: 类型转换
 print('\n[测试8] 测试类型转换...')
@@ -103,9 +103,9 @@ try:
     import numpy as np
     arr = np.array([[1, 2, 3]])
     tensor = to_tensor(arr)
-    print(f'✅ 类型转换正常: NumPy{arr.shape} -> Tensor{tensor.shape}')
+    print(f'[OK] 类型转换正常: NumPy{arr.shape} -> Tensor{tensor.shape}')
 except Exception as e:
-    print(f'❌ 类型转换失败: {e}')
+    print(f'[ERR] 类型转换失败: {e}')
 
 # 测试9: 检查文件结构
 print('\n[测试9] 检查文件结构...')
@@ -138,11 +138,11 @@ for file_path in required_files:
         missing_files.append(file_path)
 
 if missing_files:
-    print(f'⚠️  缺少以下文件:')
+    print(f'[WARN]  缺少以下文件:')
     for f in missing_files:
         print(f'   - {f}')
 else:
-    print(f'✅ 所有必需文件都存在 ({len(required_files)}个)')
+    print(f'[OK] 所有必需文件都存在 ({len(required_files)}个)')
 
 # 总结
 print('\n' + '='*80)
@@ -150,12 +150,12 @@ print('验证完成')
 print('='*80)
 
 if not missing_files:
-    print('🎉 框架验证通过！所有核心功能正常工作。')
+    print('[OK] 框架验证通过！所有核心功能正常工作。')
     print('\n下一步:')
     print('1. 让各Agent按顺序实现其负责的模块')
     print('2. 参考 Docs/workflow.md 了解如何运行')
     print('3. 查看 notebooks/01_quick_start.ipynb 学习使用')
 else:
-    print('⚠️  框架基本正常，但缺少部分文件')
+    print('[WARN]  框架基本正常，但缺少部分文件')
 
 print('='*80)

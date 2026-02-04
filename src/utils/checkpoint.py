@@ -61,7 +61,7 @@ def save_checkpoint(
     
     # 保存
     torch.save(checkpoint, path)
-    logger.info(f'✅ 检查点已保存: {path}')
+    logger.info(f'[OK] 检查点已保存: {path}')
 
 
 def load_checkpoint(
@@ -98,17 +98,17 @@ def load_checkpoint(
     
     # 加载模型参数
     model.load_state_dict(checkpoint['model_state_dict'], strict=strict)
-    logger.info(f'✅ 模型参数已加载: {path}')
+    logger.info(f'[OK] 模型参数已加载: {path}')
     
     # 加载优化器参数
     if optimizer is not None and 'optimizer_state_dict' in checkpoint:
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        logger.info('✅ 优化器参数已加载')
+        logger.info('[OK] 优化器参数已加载')
     
     # 加载调度器参数
     if scheduler is not None and 'scheduler_state_dict' in checkpoint:
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        logger.info('✅ 调度器参数已加载')
+        logger.info('[OK] 调度器参数已加载')
     
     # 返回其他信息
     info = {}
@@ -135,7 +135,7 @@ def save_model_only(model: nn.Module, path: str) -> None:
     save_path.parent.mkdir(parents=True, exist_ok=True)
     
     torch.save(model.state_dict(), path)
-    logger.info(f'✅ 模型参数已保存: {path}')
+    logger.info(f'[OK] 模型参数已保存: {path}')
 
 
 def load_model_only(
@@ -162,7 +162,7 @@ def load_model_only(
         state_dict = torch.load(path, map_location=device)
     
     model.load_state_dict(state_dict, strict=strict)
-    logger.info(f'✅ 模型参数已加载: {path}')
+    logger.info(f'[OK] 模型参数已加载: {path}')
 
 
 class CheckpointManager:
@@ -240,7 +240,7 @@ class CheckpointManager:
                 metrics={'metric': metric}
             )
             self.best_metric = metric
-            logger.info(f'🏆 新的最佳模型! 指标: {metric:.4f}')
+            logger.info(f'[BEST] 新的最佳模型! 指标: {metric:.4f}')
         
         # 清理旧检查点
         self._cleanup_old_checkpoints()
@@ -324,4 +324,4 @@ if __name__ == '__main__':
     info = manager.load_best(new_model, new_optimizer)
     print(f'最佳模型信息: {info}')
     
-    print('\n✅ 检查点管理测试完成')
+    print('\n[OK] 检查点管理测试完成')

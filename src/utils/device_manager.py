@@ -180,4 +180,4 @@ if __name__ == '__main__':
         mem_info = device_manager.get_memory_info()
         print(f'\n内存使用: {mem_info["allocated"]:.4f} GB')
     
-    print('\n✅ 设备管理器测试完成')
+    print('\n[OK] 设备管理器测试完成')
