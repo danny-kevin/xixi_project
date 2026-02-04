@@ -15,7 +15,7 @@ sys.path.insert(0, str(project_root))
 from src.data import prepare_data, DataPipeline
 
 
-def test_data_pipeline():
+def run_data_pipeline_checks() -> bool:
     """测试完整的数据预处理管道"""
     
     print("\n" + "=" * 70)
@@ -103,7 +103,7 @@ def test_data_pipeline():
         return False
 
 
-def test_individual_components():
+def run_individual_components_checks() -> bool:
     """测试各个组件"""
     
     print("\n" + "=" * 70)
@@ -185,10 +185,19 @@ def test_individual_components():
         return False
 
 
+def test_data_pipeline():
+    """Pytest wrapper for data pipeline checks."""
+    assert run_data_pipeline_checks()
+
+
+def test_individual_components():
+    """Pytest wrapper for component checks."""
+    assert run_individual_components_checks()
+
 if __name__ == '__main__':
     # 运行测试
-    success1 = test_individual_components()
-    success2 = test_data_pipeline()
+    success1 = run_individual_components_checks()
+    success2 = run_data_pipeline_checks()
     
     if success1 and success2:
         print("\n🎊 恭喜！数据预处理模块已完全实现并通过测试！\n")
