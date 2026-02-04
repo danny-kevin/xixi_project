@@ -8,6 +8,7 @@ Main Entry Point
 import argparse
 import sys
 from pathlib import Path
+import torch
 
 from src.utils.config import load_config, Config
 from src.utils.logger import setup_logger
@@ -109,111 +110,133 @@ def main():
         train(config, device, args.checkpoint, args.use_wandb)
         
     elif args.mode == 'eval':
-        logger.info('模式: 评估')
+        logger.info('Mode: eval')
         if not args.checkpoint:
-            logger.error('评估模式需要指定 --checkpoint 参数')
+            logger.error('Eval mode requires --checkpoint')
             sys.exit(1)
-        
+
         try:
             from src.models.hybrid_model import ModelFactory
             from src.evaluation.metrics import RegressionMetrics
-            from load_us_data import USCovidDataLoader
-            
-            # 加载数据
-            data_path = config.data.processed_csv or f"{config.data.raw_dir}/dataset_US_final.csv"
-            loader = USCovidDataLoader(data_path=data_path)
-            data_dict = loader.prepare_data(
-                target_column=config.data.target_column,
-                feature_columns=config.data.feature_columns,
+            from src.data.pipeline import DataPipeline
+
+            pipeline = DataPipeline(
+                data_dir=config.data.data_dir,
                 window_size=config.data.window_size,
                 horizon=config.data.prediction_horizon,
                 train_ratio=config.data.train_ratio,
                 val_ratio=config.data.val_ratio,
-                scaler_type=config.data.scaler_type
-            )
-            _, _, test_loader = loader.create_dataloaders(
-                data_dict,
                 batch_size=config.training.batch_size,
-                num_workers=config.training.num_workers
+                num_workers=config.training.num_workers,
+                use_single_file=True,
+                single_file_name='dataset_US_final.csv',
+                date_column='Date',
+                target_column=config.data.target_column,
+                group_column='State',
+                one_hot_columns=['State'],
+                normalize=False,
             )
-            
-            # 创建模型
+
+            _, _, test_loader = pipeline.run()
+            feature_names = pipeline.get_feature_names()
+            config.data.feature_columns = feature_names
+            config.model.num_variables = len(feature_names)
+            config.model.prediction_horizon = config.data.prediction_horizon
+
             model = ModelFactory.create_model(config).to(device)
-            
-            # 加载检查点
+
             checkpoint = torch.load(args.checkpoint, map_location=device)
             model.load_state_dict(checkpoint['model_state_dict'])
-            logger.info(f'✅ 模型已从 {args.checkpoint} 加载')
-            
-            # 评估
+            logger.info(f'[OK] loaded checkpoint: {args.checkpoint}')
+
             model.eval()
             all_predictions = []
             all_targets = []
-            
+
             with torch.no_grad():
                 for inputs, targets in test_loader:
                     inputs = inputs.to(device)
                     predictions = model(inputs)
-                    
-                    # 处理维度
+
                     if predictions.dim() == 3 and predictions.size(-1) == 1:
                         predictions = predictions.squeeze(-1)
                     if targets.dim() == 3 and targets.size(-1) == 1:
                         targets = targets.squeeze(-1)
-                    
+
                     all_predictions.append(predictions.cpu())
                     all_targets.append(targets.cpu())
-            
+
             predictions_tensor = torch.cat(all_predictions, dim=0)
             targets_tensor = torch.cat(all_targets, dim=0)
-            
-            # 计算指标
-            metrics = RegressionMetrics.compute_all_metrics(
+
+            metrics = RegressionMetrics.compute_all(
                 predictions_tensor.numpy(),
-                targets_tensor.numpy()
+                targets_tensor.numpy(),
             )
-            
-            logger.info('评估结果:')
-            logger.info(f'  MSE:  {metrics["mse"]:.4f}')
-            logger.info(f'  RMSE: {metrics["rmse"]:.4f}')
-            logger.info(f'  MAE:  {metrics["mae"]:.4f}')
-            logger.info(f'  MAPE: {metrics["mape"]:.2f}%')
-            logger.info(f'  R²:   {metrics["r2"]:.4f}')
-            
+
+            logger.info('Eval results:')
+            logger.info(f'  MSE:  {metrics.mse:.4f}')
+            logger.info(f'  RMSE: {metrics.rmse:.4f}')
+            logger.info(f'  MAE:  {metrics.mae:.4f}')
+            logger.info(f'  MAPE: {metrics.mape:.2f}%')
+            logger.info(f'  R2:   {metrics.r2:.4f}')
+
         except Exception as e:
-            logger.error(f'评估过程出错: {e}')
+            logger.error(f'Eval failed: {e}')
             import traceback
             traceback.print_exc()
             sys.exit(1)
-        
     elif args.mode == 'predict':
-        logger.info('模式: 预测')
+        logger.info('Mode: predict')
         if not args.checkpoint:
-            logger.error('预测模式需要指定 --checkpoint 参数')
+            logger.error('Predict mode requires --checkpoint')
             sys.exit(1)
-        
+
         try:
             from src.models.hybrid_model import ModelFactory
-            
-            # 创建模型
+            from src.data.pipeline import DataPipeline
+
+            pipeline = DataPipeline(
+                data_dir=config.data.data_dir,
+                window_size=config.data.window_size,
+                horizon=config.data.prediction_horizon,
+                train_ratio=config.data.train_ratio,
+                val_ratio=config.data.val_ratio,
+                batch_size=config.training.batch_size,
+                num_workers=config.training.num_workers,
+                use_single_file=True,
+                single_file_name='dataset_US_final.csv',
+                date_column='Date',
+                target_column=config.data.target_column,
+                group_column='State',
+                one_hot_columns=['State'],
+                normalize=False,
+            )
+
+            df = pipeline.load_data()
+            _ = pipeline.preprocess_data(df)
+            feature_names = pipeline.get_feature_names()
+            config.data.feature_columns = feature_names
+            config.model.num_variables = len(feature_names)
+            config.model.prediction_horizon = config.data.prediction_horizon
+
             model = ModelFactory.create_model(config).to(device)
-            
-            # 加载检查点
+
             checkpoint = torch.load(args.checkpoint, map_location=device)
             model.load_state_dict(checkpoint['model_state_dict'])
-            logger.info(f'✅ 模型已从 {args.checkpoint} 加载')
-            
+            logger.info(f'[OK] loaded checkpoint: {args.checkpoint}')
+
             model.eval()
-            logger.info('✅ 模型已就绪，可用于预测')
-            logger.info('注意: 详细的预测功能请使用 src.models.hybrid_model.AttentionMTCNLSTM.predict() 方法')
-            
+            logger.info('[OK] model is ready for prediction')
+            logger.info('Use AttentionMTCNLSTM.predict() for forecasts')
+
         except Exception as e:
-            logger.error(f'预测模式初始化失败: {e}')
+            logger.error(f'Predict init failed: {e}')
             import traceback
             traceback.print_exc()
             sys.exit(1)
-        
     elif args.mode == 'experiment':
+
         logger.info('模式: 完整实验')
         from run_experiment import run_experiment
         run_experiment(config, device, args.use_wandb)

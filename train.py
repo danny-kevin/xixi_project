@@ -12,6 +12,7 @@ from typing import Optional
 from src.utils.config import Config
 from src.utils.logger import setup_logger
 from src.utils.experiment_tracker import ExperimentTracker
+from src.data.pipeline import DataPipeline
 
 
 def train(
@@ -46,43 +47,37 @@ def train(
         # ==================== 步骤1: 准备数据 ====================
         logger.info('步骤1: 准备数据...')
         
-        # 使用专门的美国COVID-19数据加载器
-        from load_us_data import USCovidDataLoader
-        
-        logger.info(f'  数据目录: {config.data.raw_dir}')
-        logger.info(f'  时间窗口: {config.data.window_size}天')
-        logger.info(f'  预测范围: {config.data.prediction_horizon}天')
-        
-        # 初始化数据加载器
-        data_path = config.data.processed_csv or f"{config.data.raw_dir}/dataset_US_final.csv"
-        loader = USCovidDataLoader(data_path=data_path)
-        
-        # 准备数据
-        data_dict = loader.prepare_data(
-            target_column=config.data.target_column,
-            feature_columns=config.data.feature_columns,
+        logger.info(f'  Data dir: {config.data.data_dir}')
+        logger.info(f'  Window: {config.data.window_size}')
+        logger.info(f'  Horizon: {config.data.prediction_horizon}')
+
+        pipeline = DataPipeline(
+            data_dir=config.data.data_dir,
             window_size=config.data.window_size,
             horizon=config.data.prediction_horizon,
             train_ratio=config.data.train_ratio,
             val_ratio=config.data.val_ratio,
-            scaler_type=config.data.scaler_type
-        )
-        
-        # 创建DataLoaders
-        train_loader, val_loader, test_loader = loader.create_dataloaders(
-            data_dict,
             batch_size=config.training.batch_size,
-            num_workers=config.training.num_workers
+            num_workers=config.training.num_workers,
+            use_single_file=True,
+            single_file_name='dataset_US_final.csv',
+            date_column='Date',
+            target_column=config.data.target_column,
+            group_column='State',
+            one_hot_columns=['State'],
+            normalize=False,
         )
-        
-        # 保存预处理器供后续使用
-        preprocessor = data_dict['preprocessor']
-        
-        logger.info(f'✅ 数据准备完成')
-        logger.info(f'  训练集: {len(train_loader.dataset)} 样本, {len(train_loader)} 批次')
-        logger.info(f'  验证集: {len(val_loader.dataset)} 样本, {len(val_loader)} 批次')
-        logger.info(f'  测试集: {len(test_loader.dataset)} 样本, {len(test_loader)} 批次')
-        
+
+        train_loader, val_loader, test_loader = pipeline.run()
+        feature_names = pipeline.get_feature_names()
+        config.data.feature_columns = feature_names
+        config.model.num_variables = len(feature_names)
+        config.model.prediction_horizon = config.data.prediction_horizon
+
+        logger.info('[OK] data ready')
+        logger.info(f'  Train samples: {len(train_loader.dataset)}')
+        logger.info(f'  Val samples: {len(val_loader.dataset)}')
+        logger.info(f'  Test samples: {len(test_loader.dataset)}')
         # ==================== 步骤2: 创建模型 ====================
         logger.info('步骤2: 创建模型...')
         
@@ -101,7 +96,7 @@ def train(
         logger.info('步骤3: 创建训练器...')
         
         from src.training import Trainer, TrainingConfig
-        import torch.nn as nn
+        from src.training.loss import HybridLoss
         from src.training.scheduler import WarmupCosineScheduler
         
         # 创建优化器
@@ -122,7 +117,7 @@ def train(
         logger.info(f'  调度器: WarmupCosine (warmup={config.training.warmup_epochs} epochs)')
         
         # 创建损失函数
-        criterion = nn.MSELoss()
+        criterion = HybridLoss()
         logger.info(f'  损失函数: HybridLoss (MSE + 时序一致性正则)')
         
         # 创建训练配置

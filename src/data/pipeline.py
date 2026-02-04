@@ -199,7 +199,10 @@ class DataPipeline:
             self.feature_names = df.columns.tolist()
 
         if self.target_column not in df.columns:
-            raise ValueError(f"Target column not found: {self.target_column}")
+            if self.use_single_file:
+                raise ValueError(f"Target column not found: {self.target_column}")
+            print(f"[WARN] target column not found: {self.target_column}, fallback to first column")
+            self.target_column = df.columns[0]
 
         target_col_idx = df.columns.get_loc(self.target_column)
 

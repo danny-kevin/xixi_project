@@ -64,56 +64,35 @@ def run_experiment(
         logger.info('阶段1: 数据准备')
         logger.info('='*80)
         
-        # TODO: 由 01_data_preparation_agent 实现
-        logger.warning('⚠️  数据准备功能待 01_data_preparation_agent 实现')
-        logger.info('''
-需要实现:
-1. 加载原始数据（疫情、流动、环境、干预）
-2. 数据清洗和预处理
-3. 创建时间序列窗口
-4. 划分训练/验证/测试集
-5. 创建PyTorch DataLoader
-        ''')
-        
-        logger.error('❌ 无法继续：数据模块未实现')
-        logger.info('请先完成 01_data_preparation_agent 的实现')
-        return
-        
-        # 示例代码（待实现后取消注释）:
-        """
-        from src.data import DataLoader, DataPreprocessor, create_data_loaders
-        
-        data_loader = DataLoader(config.data.data_dir)
-        preprocessor = DataPreprocessor(config.data)
-        
-        # 加载和预处理
-        raw_data = data_loader.load_all_data()
-        logger.info(f'✅ 加载了 {len(raw_data)} 类数据')
-        
-        merged_data = data_loader.merge_data_sources(raw_data)
-        logger.info(f'✅ 合并数据形状: {merged_data.shape}')
-        
-        # 预处理
-        processed_data = preprocessor.normalize(merged_data)
-        X, y = preprocessor.create_time_windows(
-            processed_data.values,
-            window_size=config.data.window_size,
-            horizon=config.data.prediction_horizon
-        )
-        logger.info(f'✅ 创建窗口: X{X.shape}, y{y.shape}')
-        
-        # 划分数据集
-        X_train, X_val, X_test = preprocessor.temporal_train_test_split(X)
-        y_train, y_val, y_test = preprocessor.temporal_train_test_split(y)
-        
-        train_loader, val_loader, test_loader = create_data_loaders(
-            train_dataset, val_dataset, test_dataset,
-            batch_size=config.training.batch_size
-        )
-        logger.info(f'✅ 数据准备完成')
-        """
+        from src.data.pipeline import DataPipeline
 
-        
+        pipeline = DataPipeline(
+            data_dir=config.data.data_dir,
+            window_size=config.data.window_size,
+            horizon=config.data.prediction_horizon,
+            train_ratio=config.data.train_ratio,
+            val_ratio=config.data.val_ratio,
+            batch_size=config.training.batch_size,
+            num_workers=config.training.num_workers,
+            use_single_file=True,
+            single_file_name='dataset_US_final.csv',
+            date_column='Date',
+            target_column=config.data.target_column,
+            group_column='State',
+            one_hot_columns=['State'],
+            normalize=False,
+        )
+
+        train_loader, val_loader, test_loader = pipeline.run()
+        feature_names = pipeline.get_feature_names()
+        config.data.feature_columns = feature_names
+        config.model.num_variables = len(feature_names)
+        config.model.prediction_horizon = config.data.prediction_horizon
+
+        logger.info('[OK] data ready')
+        logger.info(f'  Train samples: {len(train_loader.dataset)}')
+        logger.info(f'  Val samples: {len(val_loader.dataset)}')
+        logger.info(f'  Test samples: {len(test_loader.dataset)}')
         # ==================== 阶段2: 模型创建 ====================
         logger.info('\n' + '='*80)
         logger.info('阶段2: 模型创建')
@@ -229,20 +208,20 @@ def run_experiment(
             targets_tensor = torch.cat(all_targets, dim=0)
             
             # 计算评估指标
-            metrics = RegressionMetrics.compute_all_metrics(
+            metrics = RegressionMetrics.compute_all(
                 predictions_tensor.numpy(),
                 targets_tensor.numpy()
             )
             
-            logger.info('评估结果:')
-            logger.info(f'  MSE:  {metrics["mse"]:.4f}')
-            logger.info(f'  RMSE: {metrics["rmse"]:.4f}')
-            logger.info(f'  MAE:  {metrics["mae"]:.4f}')
-            logger.info(f'  MAPE: {metrics["mape"]:.2f}%')
-            logger.info(f'  R²:   {metrics["r2"]:.4f}')
+            logger.info('Eval results:')
+            logger.info(f'  MSE:  {metrics.mse:.4f}')
+            logger.info(f'  RMSE: {metrics.rmse:.4f}')
+            logger.info(f'  MAE:  {metrics.mae:.4f}')
+            logger.info(f'  MAPE: {metrics.mape:.2f}%')
+            logger.info(f'  R2:   {metrics.r2:.4f}')
             
             # 记录到追踪器
-            tracker.log_metrics(metrics)
+            tracker.log_metrics(metrics.__dict__)
             
             # 可视化预测结果
             fig = visualizer.plot_predictions(
