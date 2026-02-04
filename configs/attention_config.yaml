@@ -1,0 +1,7 @@
+attention:
+  type: "spatiotemporal"          # variable, temporal, spatiotemporal
+  num_heads: 4
+  dropout: 0.1
+  stochastic_dropout: 0.1
+  use_layer_norm: true
+  use_residual: true

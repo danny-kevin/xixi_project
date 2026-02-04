@@ -1,0 +1,135 @@
+# 美国COVID-19数据配置 - 基于dataset_US_final.csv
+# US COVID-19 Dataset Configuration
+
+# 实验设置
+seed: 42
+experiment_name: "us_covid19_prediction"
+
+# 数据配置
+data:
+  # 路径设置
+  data_dir: "data"
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  
+  # 时间窗口设置
+  window_size: 21          # 历史窗口大小 (天) - 覆盖传染病滞后周期
+  prediction_horizon: 7    # 预测范围 (天)
+  stride: 1                # 滑动步长
+  
+  # 数据划分 (严格时序)
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+  
+  # 预处理配置
+  scaler_type: "standard"  # standard 或 minmax
+  handle_missing: "interpolate"  # interpolate, ffill, mean
+  
+  # 目标变量（我们要预测的列）
+  target_column: "Confirmed"  # 预测累计确诊病例数
+  
+  # 输入特征列表 (基于dataset_US_final.csv的实际列)
+  # 注意：预测Confirmed时，输入特征为除Confirmed外的其他列
+  feature_columns:
+    # 疫情数据
+    - Deaths              # 死亡病例数
+    # 政策干预数据
+    - Stringency          # 政策严格程度指数  
+    # 人口流动数据
+    - Mobility_Work       # 工作场所流动性
+    - Mobility_Transit    # 交通流动性
+    - Mobility_Home       # 居家流动性
+
+# 模型配置
+model:
+  # M-TCN配置
+  num_variables: 5         # 输入变量数量（用5个特征预测Confirmed）
+  input_size: 1            # 每个变量的特征维度
+  tcn_channels: [32, 64, 64]  # TCN各层输出通道
+  tcn_kernel_size: 3       # 卷积核大小
+  
+  # 注意力机制配置
+  attention_embed_dim: 128
+  attention_num_heads: 4   # 调整为4个头（特征数较少）
+  attention_dropout: 0.1   # 随机注意力丢弃概率
+  
+  # LSTM配置
+  lstm_hidden_size: 128
+  lstm_num_layers: 2
+  lstm_bidirectional: true
+  
+  # 输出配置
+  output_size: 1
+  prediction_horizon: 7
+  
+  # 正则化
+  dropout: 0.2
+
+# 注意力配置
+attention:
+  type: "spatiotemporal"
+  num_heads: 4
+  dropout: 0.1
+  stochastic_dropout: 0.1
+  use_layer_norm: true
+  use_residual: true
+
+# 训练配置
+training:
+  # 基础训练参数
+  epochs: 100
+  batch_size: 32
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  
+  # 优化器
+  optimizer: "adamw"
+  
+  # 学习率调度
+  scheduler: "cosine"      # cosine, step, plateau
+  warmup_epochs: 5
+  min_lr: 0.000001
+  
+  # 早停机制
+  early_stopping_patience: 15
+  early_stopping_min_delta: 0.0001
+   
+  # 多阶段训练
+  use_pretrain: true       # 是否使用子模块预训练
+  pretrain_epochs: 20      # 预训练epoch数
+  finetune_lr_ratio: 0.1   # 微调学习率比例
+  
+  # 梯度裁剪
+  gradient_clip_val: 1.0
+  
+  # 设备设置
+  device: "cuda"
+  num_workers: 4
+  
+  # 模型保存
+  checkpoint_dir: "checkpoints"
+  save_best_only: true
+  log_interval: 10
+
+# 评估配置
+evaluation:
+  # 评估指标
+  metrics:
+    - mse
+    - rmse
+    - mae
+    - mape
+    - r2
+    - correlation
+  
+  # 时序指标
+  time_series_metrics:
+    - directional_accuracy
+    - peak_detection_f1
+    
+  # 可解释性
+  interpretability:
+    compute_attention_weights: true
+    compute_feature_importance: true
+    generate_report: true
