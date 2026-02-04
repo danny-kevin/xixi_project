@@ -165,7 +165,8 @@ class DataPreprocessor:
         data: np.ndarray,
         window_size: int,
         horizon: int,
-        stride: int = 1
+        stride: int = 1,
+        target_col_idx: int = 0,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         创建时间序列滑动窗口
@@ -188,6 +189,9 @@ class DataPreprocessor:
             data = data.reshape(-1, 1)
         
         n_samples = len(data)
+
+        if target_col_idx < 0 or target_col_idx >= data.shape[1]:
+            raise ValueError(f"target_col_idx out of range: {target_col_idx}")
         
         for i in range(0, n_samples - window_size - horizon + 1, stride):
             # 输入窗口: 过去window_size个时间步的所有特征
@@ -195,9 +199,9 @@ class DataPreprocessor:
             
             # 目标值: 未来horizon个时间步的第一个特征（通常是new_cases）
             if horizon == 1:
-                y.append(data[i + window_size, 0])
+                y.append(data[i + window_size, target_col_idx])
             else:
-                y.append(data[i + window_size:i + window_size + horizon, 0])
+                y.append(data[i + window_size:i + window_size + horizon, target_col_idx])
         
         X = np.array(X)
         y = np.array(y)
@@ -222,7 +226,7 @@ class DataPreprocessor:
             (train, val, test) 数据集元组
         """
         n_samples = len(data)
-        
+
         # 计算分割点
         train_end = int(n_samples * train_ratio)
         val_end = int(n_samples * (train_ratio + val_ratio))

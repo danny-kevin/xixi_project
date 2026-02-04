@@ -32,7 +32,17 @@ class DataPipeline:
         train_ratio: float = 0.7,
         val_ratio: float = 0.15,
         batch_size: int = 32,
-        num_workers: int = 4
+        num_workers: int = 4,
+        use_single_file: bool = False,
+        single_file_name: str = "dataset_US_final.csv",
+        date_column: str = "Date",
+        target_column: str = "Confirmed",
+        group_column: Optional[str] = None,
+        one_hot_columns: Optional[List[str]] = None,
+        normalize: bool = True,
+        normalize_method: str = "minmax",
+        handle_missing: bool = True,
+        detect_outliers: bool = True,
     ):
         """
         初始化数据管道
@@ -53,6 +63,17 @@ class DataPipeline:
         self.val_ratio = val_ratio
         self.batch_size = batch_size
         self.num_workers = num_workers
+        self.use_single_file = use_single_file
+        self.single_file_name = single_file_name
+        self.date_column = date_column
+        self.target_column = target_column
+        self.group_column = group_column
+        self.one_hot_columns = one_hot_columns or []
+        self.normalize = normalize
+        self.normalize_method = normalize_method
+        self.handle_missing = handle_missing
+        self.detect_outliers = detect_outliers
+        self.group_values: Optional[pd.Series] = None
         
         # 初始化组件
         self.loader = DataLoader(data_dir)
@@ -64,142 +85,198 @@ class DataPipeline:
         
     def load_data(self) -> pd.DataFrame:
         """
-        加载所有数据源
-        
-        Returns:
-            合并后的DataFrame
+        Load data sources and return a merged DataFrame.
         """
-        print("📊 加载数据...")
+        if self.use_single_file:
+            return self._load_single_file()
+
+        print("[DATA] load multi-source data")
         data_dict = self.loader.load_all_data()
-        
+
         if not data_dict:
-            raise ValueError("未能加载任何数据源")
-        
-        print(f"✅ 成功加载 {len(data_dict)} 个数据源")
-        
-        # 合并数据
-        print("🔗 合并数据源...")
+            raise ValueError("No data sources found")
+
+        print(f"[DATA] loaded sources: {len(data_dict)}")
         merged_data = self.loader.merge_data_sources(data_dict)
-        print(f"✅ 合并完成，数据形状: {merged_data.shape}")
-        
+        print(f"[DATA] merged shape: {merged_data.shape}")
+
         self.merged_data = merged_data
         return merged_data
-    
+
+    def _load_single_file(self) -> pd.DataFrame:
+        candidate_paths = [
+            self.data_dir / "raw" / self.single_file_name,
+            self.data_dir / self.single_file_name,
+        ]
+        file_path = next((p for p in candidate_paths if p.exists()), None)
+        if file_path is None:
+            worktree_root = Path(__file__).resolve().parents[2]
+            primary_root = worktree_root.parent.parent
+            fallback_paths = [
+                worktree_root / "data" / "raw" / self.single_file_name,
+                primary_root / "data" / "raw" / self.single_file_name,
+            ]
+            file_path = next((p for p in fallback_paths if p.exists()), None)
+            if file_path is None:
+                tried = candidate_paths + fallback_paths
+                raise FileNotFoundError(
+                    f"Data file not found. Tried: {', '.join(str(p) for p in tried)}"
+                )
+
+        df = pd.read_csv(file_path, parse_dates=[self.date_column])
+        if self.date_column in df.columns:
+            df = df.set_index(self.date_column)
+        df = df.sort_index()
+
+        self.merged_data = df
+        return df
+
     def preprocess_data(
         self,
         df: Optional[pd.DataFrame] = None,
-        handle_missing: bool = True,
-        detect_outliers: bool = True,
-        normalize: bool = True
+        handle_missing: Optional[bool] = None,
+        detect_outliers: Optional[bool] = None,
+        normalize: Optional[bool] = None,
     ) -> pd.DataFrame:
         """
-        预处理数据
-        
-        Args:
-            df: 输入DataFrame（如果为None，使用self.merged_data）
-            handle_missing: 是否处理缺失值
-            detect_outliers: 是否检测异常值
-            normalize: 是否归一化
-            
-        Returns:
-            预处理后的DataFrame
+        Preprocess data before windowing.
         """
         if df is None:
             if self.merged_data is None:
-                raise ValueError("请先调用load_data()加载数据")
+                raise ValueError("Call load_data() first")
             df = self.merged_data
-        
+
+        if handle_missing is None:
+            handle_missing = self.handle_missing
+        if detect_outliers is None:
+            detect_outliers = self.detect_outliers
+        if normalize is None:
+            normalize = self.normalize
+
         df_processed = df.copy()
-        
-        # 1. 处理缺失值
-        if handle_missing:
-            print("🔧 处理缺失值...")
-            missing_count = df_processed.isnull().sum().sum()
-            if missing_count > 0:
-                print(f"   发现 {missing_count} 个缺失值")
-                df_processed = self.preprocessor.handle_missing_values(
-                    df_processed, 
-                    method='interpolate'
+        self.group_values = None
+        if self.group_column and self.group_column in df_processed.columns:
+            self.group_values = df_processed[self.group_column].copy()
+            self.group_values = self.group_values.fillna("Unknown")
+
+        if self.one_hot_columns:
+            one_hot_cols = [c for c in self.one_hot_columns if c in df_processed.columns]
+            if one_hot_cols:
+                df_processed = pd.get_dummies(
+                    df_processed,
+                    columns=one_hot_cols,
+                    prefix=one_hot_cols,
+                    dtype=float,
                 )
-                print(f"   ✅ 缺失值处理完成")
-        
-        # 2. 检测异常值
+
+        non_numeric = df_processed.select_dtypes(exclude=[np.number]).columns
+        if len(non_numeric) > 0:
+            df_processed = df_processed.drop(columns=non_numeric)
+
+        if handle_missing:
+            df_processed = self.preprocessor.handle_missing_values(df_processed, method="interpolate")
+
         if detect_outliers:
-            print("🔍 检测异常值...")
-            outliers = self.preprocessor.detect_outliers(
-                df_processed, 
-                method='iqr', 
-                threshold=1.5
-            )
-            outlier_count = outliers.sum().sum()
-            if outlier_count > 0:
-                print(f"   发现 {outlier_count} 个异常值")
-                # 这里可以选择处理异常值，暂时只记录
-        
-        # 3. 数据归一化
+            _ = self.preprocessor.detect_outliers(df_processed, method="iqr", threshold=1.5)
+
         if normalize:
-            print("📏 数据归一化...")
-            df_processed = self.preprocessor.normalize(
-                df_processed,
-                method='minmax'
-            )
-            print(f"   ✅ 归一化完成")
-        
+            df_processed = self.preprocessor.normalize(df_processed, method=self.normalize_method)
+
         self.feature_names = df_processed.columns.tolist()
         return df_processed
-    
+
     def create_datasets(
         self,
         df: Optional[pd.DataFrame] = None
     ) -> Tuple[EpidemicDataset, EpidemicDataset, EpidemicDataset]:
         """
-        创建训练、验证、测试数据集
-        
-        Args:
-            df: 预处理后的DataFrame
-            
-        Returns:
-            (train_dataset, val_dataset, test_dataset)
+        Create train/val/test datasets.
         """
         if df is None:
-            raise ValueError("请提供预处理后的数据")
-        
-        print("🔨 创建时间序列窗口...")
-        
-        # 转换为numpy数组
-        data_array = df.values
-        
-        # 创建时间窗口
-        X, y = self.preprocessor.create_time_windows(
-            data_array,
-            window_size=self.window_size,
-            horizon=self.horizon,
-            stride=1
-        )
-        
-        print(f"   输入形状: {X.shape}, 目标形状: {y.shape}")
-        
-        # 时序划分
-        print("✂️ 划分数据集...")
-        n_samples = len(X)
-        train_end = int(n_samples * self.train_ratio)
-        val_end = int(n_samples * (self.train_ratio + self.val_ratio))
-        
-        X_train, y_train = X[:train_end], y[:train_end]
-        X_val, y_val = X[train_end:val_end], y[train_end:val_end]
-        X_test, y_test = X[val_end:], y[val_end:]
-        
-        print(f"   训练集: {len(X_train)} 样本")
-        print(f"   验证集: {len(X_val)} 样本")
-        print(f"   测试集: {len(X_test)} 样本")
-        
-        # 创建Dataset对象
+            raise ValueError("Provide preprocessed data")
+
+        if not self.feature_names:
+            self.feature_names = df.columns.tolist()
+
+        if self.target_column not in df.columns:
+            raise ValueError(f"Target column not found: {self.target_column}")
+
+        target_col_idx = df.columns.get_loc(self.target_column)
+
+        def split_arrays(X: np.ndarray, y: np.ndarray):
+            n_samples = len(X)
+            train_end = int(n_samples * self.train_ratio)
+            val_end = int(n_samples * (self.train_ratio + self.val_ratio))
+            return (
+                X[:train_end], y[:train_end],
+                X[train_end:val_end], y[train_end:val_end],
+                X[val_end:], y[val_end:],
+            )
+
+        if self.group_column and self.group_values is not None:
+            X_train_list, y_train_list = [], []
+            X_val_list, y_val_list = [], []
+            X_test_list, y_test_list = [], []
+
+            for state in sorted(self.group_values.unique()):
+                state_mask = self.group_values == state
+                state_df = df.loc[state_mask]
+                if state_df.empty:
+                    continue
+                state_df = state_df.sort_index()
+                data_array = state_df.values
+                X_state, y_state = self.preprocessor.create_time_windows(
+                    data_array,
+                    window_size=self.window_size,
+                    horizon=self.horizon,
+                    stride=1,
+                    target_col_idx=target_col_idx,
+                )
+                if len(X_state) == 0:
+                    continue
+
+                X_tr, y_tr, X_vl, y_vl, X_te, y_te = split_arrays(X_state, y_state)
+                if len(X_tr) > 0:
+                    X_train_list.append(X_tr)
+                    y_train_list.append(y_tr)
+                if len(X_vl) > 0:
+                    X_val_list.append(X_vl)
+                    y_val_list.append(y_vl)
+                if len(X_te) > 0:
+                    X_test_list.append(X_te)
+                    y_test_list.append(y_te)
+
+            if not X_train_list:
+                raise ValueError("No windows generated from grouped data")
+
+            X_train = np.concatenate(X_train_list, axis=0)
+            y_train = np.concatenate(y_train_list, axis=0)
+
+            feature_dim = X_train.shape[2] if X_train.ndim == 3 else 0
+            empty_X = np.empty((0, self.window_size, feature_dim))
+            empty_y = np.empty((0, self.horizon)) if self.horizon > 1 else np.empty((0,))
+
+            X_val = np.concatenate(X_val_list, axis=0) if X_val_list else empty_X
+            y_val = np.concatenate(y_val_list, axis=0) if y_val_list else empty_y
+            X_test = np.concatenate(X_test_list, axis=0) if X_test_list else empty_X
+            y_test = np.concatenate(y_test_list, axis=0) if y_test_list else empty_y
+        else:
+            data_array = df.values
+            X, y = self.preprocessor.create_time_windows(
+                data_array,
+                window_size=self.window_size,
+                horizon=self.horizon,
+                stride=1,
+                target_col_idx=target_col_idx,
+            )
+            X_train, y_train, X_val, y_val, X_test, y_test = split_arrays(X, y)
+
         train_dataset = EpidemicDataset(X_train, y_train, self.feature_names)
         val_dataset = EpidemicDataset(X_val, y_val, self.feature_names)
         test_dataset = EpidemicDataset(X_test, y_test, self.feature_names)
-        
+
         return train_dataset, val_dataset, test_dataset
-    
+
     def create_dataloaders(
         self,
         train_dataset: EpidemicDataset,
@@ -251,9 +328,9 @@ class DataPipeline:
         # 2. 预处理
         processed_data = self.preprocess_data(
             merged_data,
-            handle_missing=True,
-            detect_outliers=True,
-            normalize=True
+            handle_missing=self.handle_missing,
+            detect_outliers=self.detect_outliers,
+            normalize=self.normalize
         )
         
         # 3. 创建数据集
