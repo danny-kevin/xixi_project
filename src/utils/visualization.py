@@ -58,7 +58,53 @@ class Visualizer:
             matplotlib Figure对象
         """
         # TODO: 由实现者完成
-        raise NotImplementedError("待实现: 训练历史图")
+        if not history:
+            raise ValueError("history is empty")
+
+        plt.style.use(self.style)
+
+        train_loss = history.get("train_loss", [])
+        val_loss = history.get("val_loss", [])
+        learning_rate = history.get("learning_rate", [])
+
+        has_lr = len(learning_rate) > 0
+        if has_lr:
+            fig, axes = plt.subplots(
+                2,
+                1,
+                figsize=(self.figsize[0], int(self.figsize[1] * 1.4)),
+                sharex=True,
+            )
+            loss_ax, lr_ax = axes
+        else:
+            fig, loss_ax = plt.subplots(figsize=self.figsize)
+            lr_ax = None
+
+        epochs = range(1, max(len(train_loss), len(val_loss), len(learning_rate)) + 1)
+
+        if train_loss:
+            loss_ax.plot(epochs[:len(train_loss)], train_loss, label="Train Loss")
+        if val_loss:
+            loss_ax.plot(epochs[:len(val_loss)], val_loss, label="Val Loss")
+
+        loss_ax.set_title(title)
+        loss_ax.set_ylabel("Loss")
+        if train_loss or val_loss:
+            loss_ax.legend()
+
+        if lr_ax is not None:
+            lr_ax.plot(epochs[:len(learning_rate)], learning_rate, label="Learning Rate")
+            lr_ax.set_xlabel("Epoch")
+            lr_ax.set_ylabel("LR")
+            lr_ax.legend()
+        else:
+            loss_ax.set_xlabel("Epoch")
+
+        fig.tight_layout()
+
+        if save_name:
+            self._save_figure(fig, save_name)
+        return fig
     
     def plot_predictions(
         self,
@@ -167,7 +213,34 @@ class Visualizer:
             matplotlib Figure对象
         """
         # TODO: 由实现者完成
-        raise NotImplementedError("待实现: 相关性矩阵图")
+        if data is None:
+            raise ValueError("data is required")
+
+        data_arr = np.asarray(data)
+        if data_arr.ndim != 2:
+            raise ValueError("data must be 2D")
+        if data_arr.shape[1] != len(feature_names):
+            raise ValueError("feature_names length mismatch")
+
+        corr = np.corrcoef(data_arr, rowvar=False)
+
+        plt.style.use(self.style)
+        fig, ax = plt.subplots(figsize=self.figsize)
+        sns.heatmap(
+            corr,
+            xticklabels=feature_names,
+            yticklabels=feature_names,
+            cmap="coolwarm",
+            center=0.0,
+            ax=ax,
+            cbar=False,
+        )
+        ax.set_title(title)
+        fig.tight_layout()
+
+        if save_name:
+            self._save_figure(fig, save_name)
+        return fig
     
     def plot_forecast_horizon(
         self,
@@ -229,7 +302,30 @@ class Visualizer:
             matplotlib Figure对象
         """
         # TODO: 由实现者完成
-        raise NotImplementedError("待实现: 时间序列图")
+        series_arr = np.asarray(series).squeeze()
+        if series_arr.ndim != 1:
+            series_arr = series_arr.reshape(-1)
+
+        if dates is not None and len(dates) != len(series_arr):
+            raise ValueError("dates length must match series length")
+
+        plt.style.use(self.style)
+        fig, ax = plt.subplots(figsize=self.figsize)
+        ax.plot(series_arr, label="Series", linewidth=2)
+
+        if dates is not None:
+            ax.set_xticks(np.arange(len(dates)))
+            ax.set_xticklabels(dates, rotation=45, ha="right")
+
+        ax.set_title(title)
+        ax.set_xlabel("Time")
+        ax.set_ylabel(ylabel)
+        ax.legend()
+        fig.tight_layout()
+
+        if save_name:
+            self._save_figure(fig, save_name)
+        return fig
     
     def plot_multi_series(
         self,
@@ -253,7 +349,41 @@ class Visualizer:
             matplotlib Figure对象
         """
         # TODO: 由实现者完成
-        raise NotImplementedError("待实现: 多序列图")
+        if not series_dict:
+            raise ValueError("series_dict is empty")
+
+        series_lengths = []
+        series_arrays: Dict[str, np.ndarray] = {}
+        for name, series in series_dict.items():
+            arr = np.asarray(series).squeeze()
+            if arr.ndim != 1:
+                arr = arr.reshape(-1)
+            series_arrays[name] = arr
+            series_lengths.append(len(arr))
+
+        max_len = max(series_lengths)
+        if dates is not None and len(dates) != max_len:
+            raise ValueError("dates length must match longest series length")
+
+        plt.style.use(self.style)
+        fig, ax = plt.subplots(figsize=self.figsize)
+
+        for name, arr in series_arrays.items():
+            ax.plot(arr, label=name)
+
+        if dates is not None:
+            ax.set_xticks(np.arange(len(dates)))
+            ax.set_xticklabels(dates, rotation=45, ha="right")
+
+        ax.set_title(title)
+        ax.set_xlabel("Time")
+        ax.set_ylabel(ylabel)
+        ax.legend()
+        fig.tight_layout()
+
+        if save_name:
+            self._save_figure(fig, save_name)
+        return fig
     
     def plot_prediction_interval(
         self,
