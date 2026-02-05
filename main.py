@@ -120,10 +120,11 @@ def main():
             from load_us_data import USCovidDataLoader
             
             # 加载数据
-            data_path = f"{config.data.raw_dir}/dataset_US_final.csv"
+            data_path = config.data.processed_csv or f"{config.data.raw_dir}/dataset_US_final.csv"
             loader = USCovidDataLoader(data_path=data_path)
             data_dict = loader.prepare_data(
                 target_column=config.data.target_column,
+                feature_columns=config.data.feature_columns,
                 window_size=config.data.window_size,
                 horizon=config.data.prediction_horizon,
                 train_ratio=config.data.train_ratio,

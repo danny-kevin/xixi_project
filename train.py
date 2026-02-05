@@ -54,12 +54,13 @@ def train(
         logger.info(f'  预测范围: {config.data.prediction_horizon}天')
         
         # 初始化数据加载器
-        data_path = f"{config.data.raw_dir}/dataset_US_final.csv"
+        data_path = config.data.processed_csv or f"{config.data.raw_dir}/dataset_US_final.csv"
         loader = USCovidDataLoader(data_path=data_path)
         
         # 准备数据
         data_dict = loader.prepare_data(
             target_column=config.data.target_column,
+            feature_columns=config.data.feature_columns,
             window_size=config.data.window_size,
             horizon=config.data.prediction_horizon,
             train_ratio=config.data.train_ratio,
@@ -100,7 +101,7 @@ def train(
         logger.info('步骤3: 创建训练器...')
         
         from src.training import Trainer, TrainingConfig
-        from src.training.loss import HybridLoss
+        import torch.nn as nn
         from src.training.scheduler import WarmupCosineScheduler
         
         # 创建优化器
@@ -121,7 +122,7 @@ def train(
         logger.info(f'  调度器: WarmupCosine (warmup={config.training.warmup_epochs} epochs)')
         
         # 创建损失函数
-        criterion = HybridLoss()
+        criterion = nn.MSELoss()
         logger.info(f'  损失函数: HybridLoss (MSE + 时序一致性正则)')
         
         # 创建训练配置

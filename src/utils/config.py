@@ -18,6 +18,7 @@ class DataConfig:
     data_dir: str = "data"
     raw_dir: str = "data/raw"
     processed_dir: str = "data/processed"
+    processed_csv: str = ""
     
     # 时间窗口设置
     window_size: int = 21  # 历史窗口大小 (天)

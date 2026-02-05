@@ -107,3 +107,6 @@ data/毕业论文.rar
 *.rar
 *.csv
 wandb/
+dataprocess/
+
+!dataprocess/????_new.md
