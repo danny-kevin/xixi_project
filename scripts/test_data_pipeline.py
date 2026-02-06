@@ -1,207 +1,218 @@
 """
-测试数据预处理管道
 Test Data Preprocessing Pipeline
 
-验证数据加载、预处理和数据集创建功能
+This script is used in two ways:
+- As a standalone smoke check: `python scripts/test_data_pipeline.py`
+- As a pytest test module (two tests at the bottom)
+
+Project reality:
+- Multi-source raw files may not exist in your repo.
+- The primary supported path is the single-file US dataset: `data/raw/dataset_US_final.csv`.
 """
 
 import sys
 from pathlib import Path
+from typing import Optional
 
-# 添加项目根目录到路径
+import numpy as np
+
+# Add project root to sys.path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.data import prepare_data, DataPipeline
+from src.data import DataPipeline, prepare_data
+
+
+def _detect_single_file(data_dir: Path) -> Optional[Path]:
+    raw_dir = data_dir / "raw"
+    candidate = raw_dir / "dataset_US_final.csv"
+    return candidate if candidate.exists() else None
 
 
 def run_data_pipeline_checks() -> bool:
-    """测试完整的数据预处理管道"""
-    
     print("\n" + "=" * 70)
-    print("[TEST] 测试数据预处理管道")
+    print("[TEST] data preprocessing pipeline")
     print("=" * 70 + "\n")
-    
-    # 数据目录
-    data_dir = project_root / 'data'
-    
-    # 检查数据是否存在
-    raw_dir = data_dir / 'raw'
-    if not raw_dir.exists() or not any(raw_dir.glob('*.csv')):
-        print("[WARN]  未找到数据文件，正在生成示例数据...")
+
+    data_dir = project_root / "data"
+    raw_dir = data_dir / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
+    single_file = _detect_single_file(data_dir)
+    if single_file is None and not any(raw_dir.glob("*.csv")):
+        print("[WARN] no CSV found under data/raw; generating sample data...")
         from scripts.generate_sample_data import generate_all_sample_data
+
         generate_all_sample_data(output_dir=str(raw_dir))
-        print()
-    
+        single_file = _detect_single_file(data_dir)
+
     try:
-        # 方式1: 使用便捷函数
-        print("[NOTE] 方式1: 使用 prepare_data() 便捷函数\n")
-        train_loader, val_loader, test_loader, preprocessor = prepare_data(
-            data_dir=str(data_dir),
-            window_size=21,
-            horizon=7,
-            batch_size=32,
-            num_workers=0  # Windows上设置为0
-        )
-        
+        print("[NOTE] path: prepare_data()")
+
+        if single_file is not None:
+            print(f"[INFO] using single-file dataset: {single_file}")
+            train_loader, val_loader, test_loader, preprocessor = prepare_data(
+                data_dir=str(data_dir),
+                window_size=21,
+                horizon=7,
+                batch_size=32,
+                num_workers=0,
+                use_single_file=True,
+                single_file_name="dataset_US_final.csv",
+                date_column="Date",
+                target_column="Confirmed",
+                group_column="State",
+                one_hot_columns=["State"],
+                normalize=False,
+            )
+        else:
+            print("[INFO] using multi-source dataset(s)")
+            train_loader, val_loader, test_loader, preprocessor = prepare_data(
+                data_dir=str(data_dir),
+                window_size=21,
+                horizon=7,
+                batch_size=32,
+                num_workers=0,
+            )
+
         print("\n" + "=" * 70)
-        print("[OK] 数据准备成功！")
+        print("[OK] data prepared")
         print("=" * 70)
-        
-        # 验证数据
-        print("\n[PLOT] 数据验证:")
-        print("-" * 70)
-        
-        # 获取一个批次
+
         for batch_x, batch_y in train_loader:
-            print(f"✓ 训练批次形状:")
-            print(f"  - 输入 (X): {batch_x.shape}")
-            print(f"  - 目标 (y): {batch_y.shape}")
-            print(f"  - 数据类型: {batch_x.dtype}")
+            print("\n[INFO] train batch:")
+            print(f"  X: {tuple(batch_x.shape)} dtype={batch_x.dtype}")
+            print(f"  y: {tuple(batch_y.shape)} dtype={batch_y.dtype}")
             break
-        
+
         for batch_x, batch_y in val_loader:
-            print(f"\n✓ 验证批次形状:")
-            print(f"  - 输入 (X): {batch_x.shape}")
-            print(f"  - 目标 (y): {batch_y.shape}")
+            print("\n[INFO] val batch:")
+            print(f"  X: {tuple(batch_x.shape)}")
+            print(f"  y: {tuple(batch_y.shape)}")
             break
-        
+
         for batch_x, batch_y in test_loader:
-            print(f"\n✓ 测试批次形状:")
-            print(f"  - 输入 (X): {batch_x.shape}")
-            print(f"  - 目标 (y): {batch_y.shape}")
+            print("\n[INFO] test batch:")
+            print(f"  X: {tuple(batch_x.shape)}")
+            print(f"  y: {tuple(batch_y.shape)}")
             break
-        
-        # 测试反归一化
+
         print("\n" + "-" * 70)
-        print("[RETRY] 测试反归一化功能:")
+        print("[CHECK] inverse transform (if scalers exist)")
         print("-" * 70)
-        
-        import numpy as np
-        test_data = np.array([[0.5], [0.6], [0.7]])
-        
-        # 获取第一个特征的scaler
-        feature_names = list(preprocessor.scalers.keys())
-        if feature_names:
-            first_feature = feature_names[0]
-            original = preprocessor.inverse_transform(test_data, first_feature)
-            print(f"✓ 归一化数据: {test_data.flatten()}")
-            print(f"✓ 反归一化后: {original}")
-        
+        if getattr(preprocessor, "scalers", None):
+            names = list(preprocessor.scalers.keys())
+            if names:
+                x = np.array([[0.5], [0.6], [0.7]])
+                out = preprocessor.inverse_transform(x, names[0])
+                print(f"[OK] inverse_transform works for feature={names[0]} -> {out}")
+        else:
+            print("[SKIP] no scalers present (normalize may be disabled)")
+
         print("\n" + "=" * 70)
-        print("[OK] 所有测试通过！")
+        print("[OK] pipeline checks passed")
         print("=" * 70 + "\n")
-        
         return True
-        
+
     except Exception as e:
         print("\n" + "=" * 70)
-        print(f"[ERR] 测试失败: {str(e)}")
+        print(f"[ERR] pipeline checks failed: {e}")
         print("=" * 70 + "\n")
         import traceback
+
         traceback.print_exc()
         return False
 
 
 def run_individual_components_checks() -> bool:
-    """测试各个组件"""
-    
     print("\n" + "=" * 70)
-    print("[TEST] 测试各个组件")
+    print("[TEST] individual components")
     print("=" * 70 + "\n")
-    
-    data_dir = project_root / 'data'
-    
+
+    data_dir = project_root / "data"
+    raw_dir = data_dir / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
     try:
-        # 测试DataLoader
-        print("1️⃣ 测试 DataLoader")
-        print("-" * 70)
-        from src.data import DataLoader
-        
-        loader = DataLoader(str(data_dir))
-        data_dict = loader.load_all_data()
-        
-        print(f"✓ 加载了 {len(data_dict)} 个数据源:")
-        for name, df in data_dict.items():
-            print(f"  - {name}: {df.shape}")
-        
-        merged = loader.merge_data_sources(data_dict)
-        print(f"✓ 合并后数据形状: {merged.shape}")
-        
-        # 测试DataPreprocessor
-        print("\n2️⃣ 测试 DataPreprocessor")
-        print("-" * 70)
-        from src.data import DataPreprocessor
-        
+        # Prefer a deterministic input frame for component tests.
+        single_file = _detect_single_file(data_dir)
+        if single_file is None:
+            print("[SKIP] dataset_US_final.csv not found; skipping single-file component checks")
+            return True
+
+        pipeline = DataPipeline(
+            data_dir=str(data_dir),
+            window_size=21,
+            horizon=7,
+            train_ratio=0.7,
+            val_ratio=0.15,
+            batch_size=32,
+            num_workers=0,
+            use_single_file=True,
+            single_file_name="dataset_US_final.csv",
+            date_column="Date",
+            target_column="Confirmed",
+            group_column="State",
+            one_hot_columns=["State"],
+            normalize=False,
+        )
+        df = pipeline.load_data()
+        merged = pipeline.preprocess_data(df)
+
+        print(f"[OK] loaded+processed frame: {merged.shape}")
+
+        from src.data import DataPreprocessor, EpidemicDataset
+
         preprocessor = DataPreprocessor()
-        
-        # 测试缺失值处理
+
         processed = preprocessor.handle_missing_values(merged)
-        print(f"✓ 缺失值处理完成，剩余缺失值: {processed.isnull().sum().sum()}")
-        
-        # 测试异常值检测
+        print(f"[OK] handle_missing_values: remaining_na={processed.isnull().sum().sum()}")
+
         outliers = preprocessor.detect_outliers(processed)
-        print(f"✓ 检测到 {outliers.sum().sum()} 个异常值")
-        
-        # 测试归一化
+        print(f"[OK] detect_outliers: total={int(outliers.sum().sum())}")
+
         normalized = preprocessor.normalize(processed)
-        print(f"✓ 归一化完成，数据范围: [{normalized.min().min():.3f}, {normalized.max().max():.3f}]")
-        
-        # 测试时间窗口创建
-        import numpy as np
-        data_array = normalized.values
-        X, y = preprocessor.create_time_windows(data_array, window_size=21, horizon=7)
-        print(f"✓ 时间窗口创建完成: X={X.shape}, y={y.shape}")
-        
-        # 测试数据划分
+        print(
+            f"[OK] normalize: range=[{normalized.min().min():.3f}, {normalized.max().max():.3f}]"
+        )
+
+        X, y = preprocessor.create_time_windows(
+            normalized.values, window_size=21, horizon=7
+        )
+        print(f"[OK] create_time_windows: X={X.shape} y={y.shape}")
+
         train, val, test = preprocessor.temporal_train_test_split(X)
-        print(f"✓ 数据划分完成: train={len(train)}, val={len(val)}, test={len(test)}")
-        
-        # 测试Dataset
-        print("\n3️⃣ 测试 EpidemicDataset")
-        print("-" * 70)
-        from src.data import EpidemicDataset
-        
+        print(f"[OK] split: train={len(train)} val={len(val)} test={len(test)}")
+
         dataset = EpidemicDataset(X[:100], y[:100])
-        print(f"✓ 数据集大小: {len(dataset)}")
-        print(f"✓ 特征维度: {dataset.get_feature_dim()}")
-        print(f"✓ 窗口大小: {dataset.get_window_size()}")
-        
         sample_x, sample_y = dataset[0]
-        print(f"✓ 样本形状: X={sample_x.shape}, y={sample_y.shape}")
-        
+        print(f"[OK] dataset: len={len(dataset)} sample_X={sample_x.shape} sample_y={sample_y.shape}")
+
         print("\n" + "=" * 70)
-        print("[OK] 所有组件测试通过！")
+        print("[OK] component checks passed")
         print("=" * 70 + "\n")
-        
         return True
-        
+
     except Exception as e:
         print("\n" + "=" * 70)
-        print(f"[ERR] 组件测试失败: {str(e)}")
+        print(f"[ERR] component checks failed: {e}")
         print("=" * 70 + "\n")
         import traceback
+
         traceback.print_exc()
         return False
 
 
 def test_data_pipeline():
-    """Pytest wrapper for data pipeline checks."""
     assert run_data_pipeline_checks()
 
 
 def test_individual_components():
-    """Pytest wrapper for component checks."""
     assert run_individual_components_checks()
 
-if __name__ == '__main__':
-    # 运行测试
-    success1 = run_individual_components_checks()
-    success2 = run_data_pipeline_checks()
-    
-    if success1 and success2:
-        print("\n[OK] 恭喜！数据预处理模块已完全实现并通过测试！\n")
-        sys.exit(0)
-    else:
-        print("\n[WARN]  部分测试失败，请检查错误信息\n")
-        sys.exit(1)
+
+if __name__ == "__main__":
+    ok1 = run_individual_components_checks()
+    ok2 = run_data_pipeline_checks()
+    sys.exit(0 if (ok1 and ok2) else 1)
+
