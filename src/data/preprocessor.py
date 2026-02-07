@@ -8,7 +8,57 @@ Data Preprocessor Module
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Optional, Tuple, Union
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
+
+# scikit-learn is optional. The project can run without it (e.g. in minimal envs)
+# as long as we provide compatible scalers for normalize().
+try:
+    from sklearn.preprocessing import StandardScaler, MinMaxScaler  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover
+    class StandardScaler:  # minimal sklearn-like API
+        def __init__(self):
+            self.mean_ = None
+            self.scale_ = None
+
+        def fit(self, X):
+            arr = np.asarray(X, dtype=float)
+            self.mean_ = arr.mean(axis=0)
+            self.scale_ = arr.std(axis=0)
+            self.scale_ = np.where(self.scale_ == 0, 1.0, self.scale_)
+            return self
+
+        def transform(self, X):
+            arr = np.asarray(X, dtype=float)
+            return (arr - self.mean_) / self.scale_
+
+        def fit_transform(self, X):
+            return self.fit(X).transform(X)
+
+    class MinMaxScaler:  # minimal sklearn-like API
+        def __init__(self, feature_range=(0.0, 1.0)):
+            self.feature_range = feature_range
+            self.data_min_ = None
+            self.data_max_ = None
+            self.scale_ = None
+            self.min_ = None
+
+        def fit(self, X):
+            arr = np.asarray(X, dtype=float)
+            self.data_min_ = arr.min(axis=0)
+            self.data_max_ = arr.max(axis=0)
+            data_range = self.data_max_ - self.data_min_
+            data_range = np.where(data_range == 0, 1.0, data_range)
+
+            fr_min, fr_max = self.feature_range
+            self.scale_ = (fr_max - fr_min) / data_range
+            self.min_ = fr_min - self.data_min_ * self.scale_
+            return self
+
+        def transform(self, X):
+            arr = np.asarray(X, dtype=float)
+            return arr * self.scale_ + self.min_
+
+        def fit_transform(self, X):
+            return self.fit(X).transform(X)
 
 
 class DataPreprocessor:

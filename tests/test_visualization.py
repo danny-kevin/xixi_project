@@ -64,3 +64,14 @@ def test_plot_multi_series_returns_figure():
     assert isinstance(fig, Figure)
     assert len(fig.axes) == 1
     assert len(fig.axes[0].lines) == 2
+
+
+def test_plot_residuals_multistep_returns_figure():
+    visualizer = Visualizer()
+    actual = np.random.randn(100, 4)  # multi-step forecasts
+    predicted = actual + 0.1 * np.random.randn(100, 4)
+
+    fig = visualizer.plot_residuals(actual, predicted, title="Residuals")
+
+    assert isinstance(fig, Figure)
+    assert len(fig.axes) == 2

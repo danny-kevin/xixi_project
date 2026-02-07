@@ -168,19 +168,30 @@ class Visualizer:
         Returns:
             matplotlib Figure对象
         """
-        actual = np.asarray(actual).squeeze()
-        predicted = np.asarray(predicted).squeeze()
-        residuals = actual - predicted
+        actual_arr = np.asarray(actual).squeeze()
+        predicted_arr = np.asarray(predicted).squeeze()
+
+        if actual_arr.shape != predicted_arr.shape:
+            raise ValueError(
+                f"actual/predicted shape mismatch: actual={actual_arr.shape} predicted={predicted_arr.shape}"
+            )
+
+        residuals = actual_arr - predicted_arr
+
+        # Multi-step forecasts are typically 2D: (n_samples, horizon).
+        # Flatten to a single distribution for robust hist/scatter defaults.
+        residuals_flat = residuals.reshape(-1)
+        predicted_flat = predicted_arr.reshape(-1)
 
         plt.style.use(self.style)
         fig, axes = plt.subplots(1, 2, figsize=(self.figsize[0] * 1.5, self.figsize[1]))
 
-        axes[0].hist(residuals, bins=30, color="steelblue", edgecolor="white")
+        axes[0].hist(residuals_flat, bins=30, color="steelblue", edgecolor="white")
         axes[0].set_title("Residual Distribution")
         axes[0].set_xlabel("Residual")
         axes[0].set_ylabel("Count")
 
-        axes[1].scatter(predicted, residuals, alpha=0.6)
+        axes[1].scatter(predicted_flat, residuals_flat, alpha=0.6)
         axes[1].axhline(0, color="red", linestyle="--", linewidth=1)
         axes[1].set_title("Residuals vs Predicted")
         axes[1].set_xlabel("Predicted")

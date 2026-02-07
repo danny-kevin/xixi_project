@@ -79,7 +79,8 @@ def run_experiment(
             date_column='Date',
             target_column=config.data.target_column,
             group_column='State',
-            one_hot_columns=['State'],
+            # Keep per-state windowing, but do NOT leak state identity as features.
+            one_hot_columns=[],
             normalize=False,
         )
 
