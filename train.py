@@ -219,3 +219,4 @@ if __name__ == '__main__':
     
     # 训练
     train(config, device, use_wandb=False)
+
