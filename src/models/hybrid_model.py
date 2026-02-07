@@ -45,7 +45,10 @@ class AttentionMTCNLSTM(nn.Module):
         output_size: int = 1,
         prediction_horizon: int = 7,
         dropout: float = 0.2,
-        attention_dropout: float = 0.1
+        attention_dropout: float = 0.1,
+        use_state_embedding: bool = False,
+        num_states: int = 0,
+        state_embed_dim: int = 16
     ):
         """
         初始化混合模型
@@ -93,6 +96,14 @@ class AttentionMTCNLSTM(nn.Module):
             stochastic_dropout=attention_dropout,
         )
 
+        self.use_state_embedding = bool(use_state_embedding and num_states > 0)
+        if self.use_state_embedding:
+            self.state_embedding = nn.Embedding(num_states, state_embed_dim)
+            self.state_proj = nn.Linear(state_embed_dim, self.attention_feature_dim)
+        else:
+            self.state_embedding = None
+            self.state_proj = None
+
         self.lstm = AttentiveLSTM(
             input_size=num_variables * self.attention_feature_dim,
             hidden_size=lstm_hidden_size,
@@ -112,6 +123,7 @@ class AttentionMTCNLSTM(nn.Module):
     def forward(
         self, 
         x: torch.Tensor,
+        state_ids: Optional[torch.Tensor] = None,
         return_attention: bool = False
     ) -> Tuple[torch.Tensor, Optional[Dict[str, torch.Tensor]]]:
         """
@@ -132,6 +144,11 @@ class AttentionMTCNLSTM(nn.Module):
         tcn_out = tcn_out.view(batch_size, seq_len, self.num_variables, self.mtcn_feature_dim)
         if self.feature_projection is not None:
             tcn_out = self.feature_projection(tcn_out)
+
+        if self.use_state_embedding and state_ids is not None:
+            state_emb = self.state_embedding(state_ids)
+            state_emb = self.state_proj(state_emb).view(batch_size, 1, 1, self.attention_feature_dim)
+            tcn_out = tcn_out + state_emb
         tcn_out = tcn_out.reshape(batch_size, seq_len, -1)
 
         attn_out, attn_weights = self.attention(tcn_out, return_attention=True)
@@ -146,7 +163,7 @@ class AttentionMTCNLSTM(nn.Module):
             return predictions, attention_dict
         return predictions
     
-    def get_attention_weights(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
+    def get_attention_weights(self, x: torch.Tensor, state_ids: Optional[torch.Tensor] = None) -> Dict[str, torch.Tensor]:
         """
         获取注意力权重 (用于模型解释)
         
@@ -158,13 +175,14 @@ class AttentionMTCNLSTM(nn.Module):
         """
         self.eval()
         with torch.no_grad():
-            _, attention = self.forward(x, return_attention=True)
+            _, attention = self.forward(x, state_ids=state_ids, return_attention=True)
         return attention
     
     def predict(
         self, 
         x: torch.Tensor,
-        forecast_steps: int = 7
+        forecast_steps: int = 7,
+        state_ids: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
         """
         多步预测
@@ -176,7 +194,7 @@ class AttentionMTCNLSTM(nn.Module):
         Returns:
             预测结果张量
         """
-        predictions = self.forward(x, return_attention=False)
+        predictions = self.forward(x, state_ids=state_ids, return_attention=False)
         if forecast_steps == self.prediction_horizon:
             return predictions
         if forecast_steps < self.prediction_horizon:
@@ -244,6 +262,9 @@ class ModelFactory:
             prediction_horizon=_get(model_config, "prediction_horizon", 7),
             dropout=_get(model_config, "dropout", 0.2),
             attention_dropout=attention_dropout,
+            use_state_embedding=_get(model_config, "use_state_embedding", False),
+            num_states=_get(model_config, "num_states", 0),
+            state_embed_dim=_get(model_config, "state_embed_dim", 16),
         )
     
     @staticmethod

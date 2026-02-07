@@ -144,6 +144,14 @@ class Trainer:
             'val_loss': [],
             'learning_rate': []
         }
+
+    @staticmethod
+    def _unpack_batch(batch):
+        if len(batch) == 3:
+            inputs, targets, state_ids = batch
+            return inputs, targets, state_ids
+        inputs, targets = batch
+        return inputs, targets, None
         
     def train(
         self,
@@ -202,11 +210,16 @@ class Trainer:
         pbar = tqdm(val_loader, desc='  Validation', leave=True, position=2, ncols=100)
         
         with torch.no_grad():
-            for inputs, targets in pbar:
+            for batch in pbar:
+                inputs, targets, state_ids = self._unpack_batch(batch)
                 inputs = inputs.to(self.device)
                 targets = targets.to(self.device)
 
-                predictions = self.model(inputs)
+                if state_ids is not None:
+                    state_ids = state_ids.to(self.device)
+                    predictions = self.model(inputs, state_ids=state_ids)
+                else:
+                    predictions = self.model(inputs)
                 predictions, targets = self._align_predictions(predictions, targets)
                 loss = self.criterion(predictions, targets)
                 total_loss += loss.item()
@@ -227,12 +240,17 @@ class Trainer:
         # 创建训练进度条 (位置2，保留显示)
         pbar = tqdm(train_loader, desc='  Training', leave=True, position=1, ncols=100)
 
-        for inputs, targets in pbar:
+        for batch in pbar:
+            inputs, targets, state_ids = self._unpack_batch(batch)
             inputs = inputs.to(self.device)
             targets = targets.to(self.device)
 
             optimizer.zero_grad()
-            predictions = self.model(inputs)
+            if state_ids is not None:
+                state_ids = state_ids.to(self.device)
+                predictions = self.model(inputs, state_ids=state_ids)
+            else:
+                predictions = self.model(inputs)
             predictions, targets = self._align_predictions(predictions, targets)
             loss = self.criterion(predictions, targets)
             loss.backward()

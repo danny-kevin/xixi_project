@@ -1,5 +1,5 @@
-﻿seed: 42
-experiment_name: attention_mtcn_lstm_epidemic
+seed: 42
+experiment_name: attention_mtcn_lstm_epidemic_stable
 data:
   data_dir: data
   raw_dir: data/raw
@@ -12,10 +12,6 @@ data:
   test_ratio: 0.15
   scaler_type: none
   handle_missing: interpolate
-  per_state_normalize: false
-  target_log1p: false
-  inverse_transform: false
-  state_column: State
   target_column: Confirmed
   feature_columns:
   - Confirmed
@@ -43,10 +39,7 @@ model:
   lstm_bidirectional: true
   output_size: 1
   prediction_horizon: 4
-  dropout: 0.2
-  use_state_embedding: true
-  num_states: 51
-  state_embed_dim: 16
+  dropout: 0.25
 attention:
   type: spatiotemporal
   num_heads: 4
@@ -55,15 +48,15 @@ attention:
   use_layer_norm: true
   use_residual: true
 training:
-  epochs: 100
+  epochs: 120
   batch_size: 32
-  learning_rate: 0.001
-  weight_decay: 0.0001
+  learning_rate: 0.0005
+  weight_decay: 0.0002
   optimizer: adamw
   scheduler: cosine
-  warmup_epochs: 5
+  warmup_epochs: 3
   min_lr: 1.0e-06
-  early_stopping_patience: 15
+  early_stopping_patience: 20
   early_stopping_min_delta: 0.0001
   use_pretrain: false
   pretrain_epochs: 20
@@ -71,7 +64,7 @@ training:
   gradient_clip_val: 1.0
   device: cpu
   num_workers: 4
-  checkpoint_dir: checkpoints
+  checkpoint_dir: checkpoints/stable_tune
   save_best_only: true
   log_interval: 10
 evaluation:

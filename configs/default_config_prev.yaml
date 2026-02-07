@@ -1,4 +1,4 @@
-﻿seed: 42
+seed: 42
 experiment_name: attention_mtcn_lstm_epidemic
 data:
   data_dir: data
@@ -12,10 +12,6 @@ data:
   test_ratio: 0.15
   scaler_type: none
   handle_missing: interpolate
-  per_state_normalize: false
-  target_log1p: false
-  inverse_transform: false
-  state_column: State
   target_column: Confirmed
   feature_columns:
   - Confirmed
@@ -44,9 +40,6 @@ model:
   output_size: 1
   prediction_horizon: 4
   dropout: 0.2
-  use_state_embedding: true
-  num_states: 51
-  state_embed_dim: 16
 attention:
   type: spatiotemporal
   num_heads: 4

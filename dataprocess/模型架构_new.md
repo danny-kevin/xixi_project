@@ -1,228 +1,153 @@
-﻿# 模型架构概述（代码实现版）
+﻿
 
-本文档是对当前代码中模型实现的结构化总结，便于快速复现与沟通。
-模型对应 `src/models/hybrid_model.py` 的 `AttentionMTCNLSTM`。
+# CCTAL v2 模型架构说明书 (优化版)
 
----
+**(Causal CI-TCN Variable Attention LSTM)**
 
-## 1. 输入输出与张量形状
+## 0. 模型定位与设计哲学
 
-- 输入：`X ∈ R^{B×T×V}`，其中 `T=12`、`V=8`
-- 输出：`ŷ ∈ R^{B×T_out×1}`，其中 `T_out=4`
+本模型专为**美国州级新冠疫情时空面板数据**设计，基于 `2020-12-06` 至 `2021-10-16` 的黄金数据窗口。
 
----
+* **核心理念**：
+1. **解耦 (Decoupling)**：利用 **CI-TCN** 防止确诊数据的高频噪声（Log变换后）淹没政策数据的低频信号。
+2. **重连 (Re-coupling)**：利用 **Variable Attention** 在特征提取后动态加权，特别是捕捉**滞后14天处理后**的政策信号与当前确诊的因果关联。
+3. **整合 (Integration)**：利用 **LSTM** 汇总短期（4周）的时序状态，输出稳健的预测。
 
-## 2. 模型总体流程
 
-1. **M‑TCN（每变量独立 TCN）**：为每个变量提取局部时序特征
-2. **时空注意力（Temporal + Variable + Gate）**：融合时间与变量维度信息
-3. **注意力 LSTM**：双向 LSTM + MultiheadAttention 汇聚
-4. **MLP 输出头**：直接输出多步预测
 
 ---
 
-## 3. M‑TCN 细节
+## 1. 任务定义与张量规范
 
-- 对每个变量 `v`，独立一套 TCN 子网络
-- 单变量 TCN 由多层因果卷积残差块组成（dilation 递增）
-- 每个变量输出形状：`(B, T, d)`
-- 拼接后总输出：`H ∈ R^{B×T×(V·d)}`
+### 1.1 数据输入与输出
 
----
+* **输入张量 (Input Tensor)**:
 
-## 4. 时空注意力模块
 
-包含两条分支：
+* : Batch Size (批大小，建议 32 或 64)
+* : **4** (**重要变更**：根据最新数据方案，输入为过去 4 周)
+* : **8** (变量数)
+1. `Confirmed`: 已做  变换 + MinMax 归一化。
+2. `Mobility` (6列): 零售、公园、办公等。
+3. `StringencyIndex` (1列): **已做 14 天前向滞后处理**。
 
-- **TemporalAttention**：在时间维度做 self‑attention（因果 mask）
-- **VariableAttention**：在变量维度做 multi‑head attention
 
-两条分支通过门控融合：
 
-```
-A = gate * temporal_out + (1 - gate) * variable_out
-```
 
-输出形状保持：`(B, T, V·d)`
+* **输出张量 (Output Tensor)**:
 
----
 
-## 5. LSTM 模块
+* : **4** (预测窗口，未来 4 周)
+* *策略*：**Direct Multi-horizon Forecasting**，一次性输出未来 4 个时间步。
+* *注*：模型输出的值是在 Log 空间归一化后的数值，计算 RMSE/MAE 时需先反归一化再反 Log。
 
-- **双向 LSTM** 输出：`(B, T, 2h)`
-- 使用 learnable query 的 MultiheadAttention 做序列汇聚
-- 得到上下文向量 `context ∈ R^{B×2h}`
+
 
 ---
 
-## 6. 输出头
+## 2. 总体架构流水线 (Pipeline)
 
-- 两层 MLP：`Linear(2h → h) → ReLU → Dropout → Linear(h → T_out)`
-- reshape 到 `ŷ ∈ R^{B×T_out×1}`
+模型由四个核心模块串联而成：
 
----
-
-## 7. 逐层参数尺寸表（贴近代码）
-
-记：`V=8`, `T=12`, `d = tcn_channels[-1]`, `H = attention_embed_dim`, `h = lstm_hidden_size`
-
-| 层级 | 输入张量 | 核心参数 | 输出张量 |
-|---|---|---|---|
-| 输入 | `(B, 12, 8)` | - | `(B, 12, 8)` |
-| M‑TCN 单变量 | `(B, 12, 1)` | `tcn_channels=[.., d]` | `(B, 12, d)` |
-| M‑TCN 拼接 | 8 个 `(B,12,d)` | concat | `(B, 12, 8d)` |
-| 投影（可选） | `(B, 12, 8d)` | `Linear(d→H)`/变量内投影 | `(B, 12, 8H)` |
-| TemporalAttention | `(B, 12, 8H)` | `num_heads` | `(B, 12, 8H)` |
-| VariableAttention | `(B, 12, 8H)` | `num_heads` | `(B, 12, 8H)` |
-| Gate 融合 | `(B, 12, 8H)` | `Linear(16H→8H)` | `(B, 12, 8H)` |
-| BiLSTM | `(B, 12, 8H)` | `hidden=h, layers=L` | `(B, 12, 2h)` |
-| MHA 汇聚 | `(B, 12, 2h)` | `heads=n` | `(B, 1, 2h)` |
-| MLP 输出头 | `(B, 2h)` | `Linear(2h→h→T_out)` | `(B, T_out)` |
-| reshape | `(B, T_out)` | - | `(B, T_out, 1)` |
-
-> 注意：当 `attention_embed_dim == d` 时，不需要额外投影；否则会线性映射到 `H`。
+1. **Encoder (CI-TCN)**: 独立通道特征提取器。针对  的短序列进行了轻量化适配。
+2. **Mixer (Variable Attention)**: 变量混合器。学习在短窗口内不同变量的重要性。
+3. **Decoder (LSTM)**: 时序状态解码器。
+4. **Head (Linear)**: 预测头。
 
 ---
 
-## 8. 图示版结构图（Mermaid）
+## 3. 模块详解 (针对 4 周窗口优化)
 
-```mermaid
-flowchart LR
-    X[B×12×8 输入] --> MTCN[M‑TCN: 每变量独立 TCN]
-    MTCN --> H[B×12×(8d)]
-    H --> TA[TemporalAttention]
-    H --> VA[VariableAttention]
-    TA --> G[Gate 融合]
-    VA --> G
-    G --> LSTM[BiLSTM]
-    LSTM --> MHA[MultiheadAttention 聚合]
-    MHA --> MLP[MLP 输出头]
-    MLP --> Y[B×4×1 输出]
-```
+### 3.1 CI-TCN Encoder (特征解耦)
 
----
+由于输入只有 4 个时间步，TCN 不需要过深，否则会导致 Padding 噪音过多。
 
-## 9. 公式版前向传播流程图
+* **输入变换**: 将输入维度调整为  以适配 1D 卷积。
+* **核心实现 (Grouped Convolution)**:
+* `nn.Conv1d(in_channels=V, out_channels=V*d, groups=V)`。
+* *解释*：确诊、流动性、政策这 8 个变量拥有独立的卷积核。
 
-记：
-- `B` 批大小
-- `T=12` 输入长度
-- `V=8` 变量数
-- `d = tcn_channels[-1]`
-- `H = attention_embed_dim`
-- `h = lstm_hidden_size`
 
-```
-X ∈ R^{B×T×V}
+* **结构参数调整 (适配 )**:
+* **Kernel Size ()**: 推荐设为 **2**。
+* **Dilation Sequence ()**: 推荐设为 **(1, 2)**。
+* *感受野计算*：
+* 第一层 (d=1, k=2): 看 2 个时间步。
+* 第二层 (d=2, k=2): 感受野增加 2，总感受野为 。
+* **完美覆盖**：刚好覆盖输入的 4 周，无需过多的 Zero Padding。
 
-(1) M‑TCN
-H_v = TCN_v(X[:,:,v]) ∈ R^{B×T×d}, v=1..V
-H = concat_v(H_v) ∈ R^{B×T×(V·d)}
-if d != H: H = Linear(H)
 
-(2) 时空注意力
-H_t = TemporalAttn(H) ∈ R^{B×T×(V·H)}
-H_v = VariableAttn(H) ∈ R^{B×T×(V·H)}
-G = sigmoid(W_g [H_t; H_v])
-A = G ⊙ H_t + (1-G) ⊙ H_v  ∈ R^{B×T×(V·H)}
 
-(3) 注意力 LSTM
-L = BiLSTM(A) ∈ R^{B×T×(2h)}
-q = learnable query
-c = MHA(q, L, L) ∈ R^{B×1×(2h)}
 
-(4) 输出
-ŷ = MLP(c) -> reshape -> R^{B×T_out×1} (T_out=4)
-```
+
+### 3.2 Variable Attention Mixer (动态重连)
+
+* **Step-specific Attention**:
+鉴于预测目标是未来 4 周，且政策效果（已滞后14天）可能在未来第 3-4 周体现得更明显，我们继续为每个预测步  学习独立的权重。
+* **计算逻辑**:
+
+
+* 这里  将直接反映：在预测未来第  周时，历史第  周的第  个变量有多重要。
+
+
+
+### 3.3 LSTM Decoder (时序整合)
+
+* **架构**: 单层、单向 LSTM。
+* **输入**: 融合后的特征序列  (长度为 4)。
+* **操作**:
+
+
+* **输出选择**: 提取 **Last Hidden State ()** 作为上下文向量。
+
+### 3.4 Linear Head (预测输出)
+
+* **公式**: 
+* **维度**: `nn.Linear(hidden_size, 4)`。
 
 ---
 
-## 10. 关键模块伪代码
+## 4. 可解释性与分析支持
 
-### 10.1 M‑TCN
+### 4.1 变量权重热力图 (Heatmaps)
 
-```python
-# X: (B, T, V)
-outputs = []
-for v in range(V):
-    x_v = X[:, :, v].unsqueeze(-1)      # (B, T, 1)
-    h_v = TCN_v(x_v)                    # (B, T, d)
-    outputs.append(h_v)
-H = concat(outputs, dim=-1)             # (B, T, V*d)
-```
+* **X轴**: 历史时间步 (t-3, t-2, t-1, t)。
+* **Y轴**: 8 个变量。
+* **关键看点**:
+* 你的政策数据已经滞后了 14 天（2周）。
+* 如果在热力图中，政策变量在  (当前周) 或  (上周) 的权重很高，说明**实际发生在一个月前的政策**对现在的预测有重大影响。
+* **论文叙事点**：结合你的数据处理，这证明了政策的**长期滞后效应**被模型成功捕捉。
 
-### 10.2 SpatioTemporalAttention
 
-```python
-# H: (B, T, V*d)
-H_t = TemporalAttention(H)              # (B, T, V*d)
-H_v = VariableAttention(H)              # (B, T, V*d)
-G = sigmoid(W_g([H_t, H_v]))            # (B, T, V*d)
-A = G * H_t + (1-G) * H_v               # (B, T, V*d)
-```
-
-### 10.3 AttentiveLSTM
-
-```python
-# A: (B, T, V*d)
-L, _ = BiLSTM(A)                         # (B, T, 2h)
-q = learnable_query.expand(B, 1, 2h)
-context, _ = MHA(q, L, L)                # (B, 1, 2h)
-context = context.squeeze(1)             # (B, 2h)
-```
-
-### 10.4 Output Head
-
-```python
-# context: (B, 2h)
-out = Linear(2h, h) -> ReLU -> Dropout -> Linear(h, T_out)
-y_hat = out.view(B, T_out, 1)
-```
 
 ---
 
-## 11. 损失函数与训练流程（代码一致）
+## 5. 训练配置与防泄漏 (基于你的数据方案)
 
-### 11.1 损失函数
+* **归一化策略 (Data Leakage Prevention)**:
+* 模型加载的 `scaler_data_min.npy` 和 `scaler_data_max.npy` 必须**仅由 Training Weeks 计算得出**。
+* Validation 和 Test 数据在输入模型前，使用这两个文件参数进行 Transform。
 
-代码使用 `HybridLoss`（`src/training/loss.py`）：
-- 基础项：MSE
-- 正则项：时间一致性约束（鼓励预测序列平滑/稳定）
 
-若你在论文里只想描述经典损失，可注明“实现中使用 MSE + 时序一致性正则”。
+* **损失函数**: `MSELoss` (在 Log-Scaled 空间计算)。
+* **评估指标**:
+* 在计算 MAE/RMSE 时，必须执行 **Inverse Transform**：
+1. `Inverse_MinMax(pred)`
+2. `exp(pred) - 1` (反 Log 变换)
 
-### 11.2 训练流程
 
-1. 数据加载与滑窗构造
-2. 前向传播得到多步预测
-3. 计算 `HybridLoss`
-4. 反向传播 + 梯度裁剪（若配置）
-5. 学习率调度（WarmupCosine）
-6. 验证集早停（EarlyStopping）
-7. 保存最佳模型
+* 这样汇报的是真实的“确诊人数”误差。
+
+
 
 ---
 
-## 12. 超参数表（推荐起步值）
+## 6. 消融实验设计 (保持不变)
 
-| 模块 | 参数 | 取值（建议） | 说明 |
-|---|---|---|---|
-| 输入 | `T_in` | 12 | 输入长度（周） |
-| 输出 | `T_out` | 4 | 预测步数 |
-| 输入 | `V` | 8 | 特征维度 |
-| M‑TCN | `tcn_channels` | `[32, 64, 64]` | 最后一层 d=64 |
-| M‑TCN | `tcn_kernel_size` | 3 | Causal Conv kernel |
-| M‑TCN | `dropout` | 0.2 | TCN dropout |
-| 注意力 | `attention_embed_dim` | 128 | 若不等于 d，会线性投影 |
-| 注意力 | `attention_num_heads` | 8 | 多头数 |
-| 注意力 | `attention_dropout` | 0.1 | 随机注意力丢弃 |
-| LSTM | `lstm_hidden_size` | 128 | LSTM hidden |
-| LSTM | `lstm_num_layers` | 2 | LSTM 层数 |
-| 训练 | `learning_rate` | 1e-3 | AdamW |
-| 训练 | `weight_decay` | 1e-4 | 正则 |
+| 模型代号 | 架构描述 | 验证目的 |
+| --- | --- | --- |
+| **M1: Base (LSTM)** | 原始变量(8维)  LSTM | Baseline。 |
+| **M2: CI-Only** | CI-TCN(dilations=[1,2])  LSTM | 验证 CI 结构对 Log 变换后数据的特征提取能力。 |
+| **M3: CCTAL (Full)** | CI-TCN  Attention  LSTM | 验证动态权重带来的提升。 |
+| **M4: No-Policy** | 输入 7 维 (去掉 Stringency) | **关键实验**：证明加上处理过的政策数据，误差确实降低了。 |
 
----
-
-## 13. 一句话总结
-
-该模型先用 **M‑TCN** 为每个变量独立提取局部时序特征，再用 **时空注意力**融合变量与时间信息，最后通过 **双向注意力 LSTM** 汇聚，输出未来 4 周预测结果。
