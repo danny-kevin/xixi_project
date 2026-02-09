@@ -41,7 +41,7 @@ python load_us_data.py
 ### 2. 使用专用配置文件训练
 
 ```bash
-python main.py --mode train --config configs/us_data_config.yaml
+python main.py --mode train --config configs/default_config.yaml
 ```
 
 ---
@@ -50,7 +50,7 @@ python main.py --mode train --config configs/us_data_config.yaml
 
 由于实际数据只有**5个输入特征**，已对模型配置进行了以下调整:
 
-### `configs/us_data_config.yaml`
+### `configs/default_config.yaml`
 
 ```yaml
 model:
@@ -165,7 +165,7 @@ dataset = EpidemicDataset(X, y)
 
 ### 更改预测目标为Deaths
 
-修改 `configs/us_data_config.yaml`:
+修改 `configs/default_config.yaml`:
 
 ```yaml
 data:
@@ -212,7 +212,7 @@ print(df.isnull().sum())
 使用数据前请确认:
 
 - [ ] CSV文件存在: `data/raw/dataset_US_final.csv`
-- [ ] 配置文件正确: `configs/us_data_config.yaml`
+- [ ] 配置文件正确: `configs/default_config.yaml`
 - [ ] 数据加载器可运行: `python load_us_data.py`
 - [ ] 目标变量已确认: `Confirmed` 或 `Deaths`
 - [ ] 特征数量匹配: 模型 `num_variables = 5`

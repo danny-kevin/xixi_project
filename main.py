@@ -31,7 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--mode",
         type=str,
-        choices=["train", "eval", "predict", "experiment"],
+        choices=["train", "eval", "predict", "experiment", "tune"],
         default="train",
         help="Run mode",
     )
@@ -59,6 +59,42 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--log-level", type=str, default="INFO", help="Log level")
     parser.add_argument("--use-wandb", action="store_true", help="Enable wandb tracking")
+
+    # Optuna tuning (mode: tune)
+    parser.add_argument("--tune-trials", type=int, default=50, help="Number of Optuna trials")
+    parser.add_argument("--tune-timeout", type=int, default=None, help="Optuna timeout (seconds)")
+    parser.add_argument(
+        "--tune-study-name",
+        type=str,
+        default="optuna_study",
+        help="Optuna study name",
+    )
+    parser.add_argument(
+        "--tune-storage",
+        type=str,
+        default=None,
+        help="Optuna storage URI (e.g. sqlite:///.../study.db)",
+    )
+    parser.add_argument(
+        "--tune-sampler",
+        type=str,
+        choices=["tpe", "random"],
+        default="tpe",
+        help="Optuna sampler",
+    )
+    parser.add_argument(
+        "--tune-pruner",
+        type=str,
+        choices=["median", "none"],
+        default="median",
+        help="Optuna pruner",
+    )
+    parser.add_argument(
+        "--tune-num-workers",
+        type=int,
+        default=0,
+        help="Number of parallel Optuna jobs (0/1 is safest on Windows)",
+    )
 
     return parser.parse_args()
 
@@ -232,6 +268,28 @@ def main() -> None:
         from run_experiment import run_experiment
 
         run_experiment(config, device, args.use_wandb)
+        return
+
+    if args.mode == "tune":
+        logger.info("Mode: tune")
+        from src.tuning.optuna_tuner import tune_with_optuna
+
+        result = tune_with_optuna(
+            config=config,
+            device=device,
+            output_dir=output_dir,
+            n_trials=args.tune_trials,
+            timeout=args.tune_timeout,
+            study_name=args.tune_study_name,
+            storage=args.tune_storage,
+            sampler=args.tune_sampler,
+            pruner=args.tune_pruner,
+            num_workers=args.tune_num_workers,
+        )
+
+        logger.info("[OK] tuning complete")
+        logger.info(f"  Best val_loss: {result.get('best_value')}")
+        logger.info(f"  Study dir: {result.get('study_dir')}")
         return
 
     raise RuntimeError(f"Unexpected mode: {args.mode}")

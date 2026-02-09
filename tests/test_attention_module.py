@@ -171,8 +171,17 @@ def test_attention_visualizer_runs(monkeypatch):
     visualizer.plot_temporal_attention(np.random.rand(4, 4))
 
 
-def test_attention_config_loading():
-    config = load_config("configs/attention_config.yaml")
+def test_attention_config_loading(tmp_path):
+    # Keep this test independent from repo config files: verify we can load
+    # a minimal attention-only YAML and get the expected defaults elsewhere.
+    cfg_path = tmp_path / "attention_only.yaml"
+    cfg_path.write_text(
+        "attention:\n"
+        "  type: spatiotemporal\n"
+        "  num_heads: 4\n",
+        encoding="utf-8",
+    )
+    config = load_config(cfg_path)
     assert config.attention.num_heads == 4
     assert config.attention.type == "spatiotemporal"
 

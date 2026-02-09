@@ -504,7 +504,7 @@ class AttentionVisualizer:
 ## 📝 配置参数说明
 
 ```yaml
-# configs/attention_config.yaml
+# configs/default_config.yaml
 attention:
   type: "spatiotemporal"          # variable, temporal, spatiotemporal
   num_heads: 4                    # 注意力头数

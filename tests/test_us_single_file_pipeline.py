@@ -20,7 +20,7 @@ def test_us_single_file_pipeline_state_one_hot_and_windows():
         num_workers=0,
         use_single_file=True,
         single_file_name="dataset_US_final.csv",
-        target_column="Confirmed",
+        target_column="WeeklyNewConfirmed_log1p_minmax",
         date_column="Date",
         group_column="State",
         one_hot_columns=["State"],

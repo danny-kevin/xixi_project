@@ -95,7 +95,7 @@ class ExperimentTracker:
   def log_metric(
     self,
     name: str,
-    value: Union[float, int],
+    value: Union[float, int, None],
     step: Optional[int] = None
   ) -> None:
     """
@@ -108,6 +108,10 @@ class ExperimentTracker:
     """
     if step is None:
       step = self.step
+
+    # Optional metrics may be None (e.g. CRPS not computed). Skip in that case.
+    if value is None:
+      return
     
     # TensorBoard
     if self.tensorboard_writer is not None:
@@ -119,7 +123,7 @@ class ExperimentTracker:
   
   def log_metrics(
     self,
-    metrics: Dict[str, Union[float, int]],
+    metrics: Dict[str, Union[float, int, None]],
     step: Optional[int] = None
   ) -> None:
     """
@@ -135,6 +139,8 @@ class ExperimentTracker:
     # TensorBoard
     if self.tensorboard_writer is not None:
       for name, value in metrics.items():
+        if value is None:
+          continue
         if isinstance(value, (list, tuple)):
           # 如果是列表，记录最后一个值
           value = value[-1] if len(value) > 0 else 0
@@ -145,6 +151,8 @@ class ExperimentTracker:
       # 处理列表值
       processed_metrics = {}
       for name, value in metrics.items():
+        if value is None:
+          continue
         if isinstance(value, (list, tuple)):
           value = value[-1] if len(value) > 0 else 0
         processed_metrics[name] = value
